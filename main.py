@@ -1,6 +1,6 @@
 import os
 import matplotlib
-# 1. 強制設定後台繪圖 (最優先)
+# 1. 強制設定後台繪圖 (最優先，防止 GitHub Actions 報錯)
 matplotlib.use('Agg') 
 import requests
 import yfinance as yf
@@ -32,6 +32,7 @@ def get_sp500_tickers():
         return tickers
     except Exception as e:
         print(f"❌ 無法抓取 S&P 500 名單: {e}")
+        # 備用名單
         return ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD", "NFLX", "INTC"]
 
 def calculate_beta(stock_returns, market_returns):
@@ -52,11 +53,13 @@ def auto_select_candidates():
     print("🚀 啟動超級篩選器 (Criteria: Cap>3B, Price>SMA200, Vol>900M, Beta>=1)...")
     
     raw_tickers = get_sp500_tickers()
-    growth_adds = ["PLTR", "SOFI", "COIN", "MARA", "MSTR", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "ARM", "SMCI", "APP", "RDDT", "HIMS", "ASTS"]
+    # 補上一些熱門成長股，以免遺漏
+    growth_adds = ["PLTR", "SOFI", "COIN", "MARA", "MSTR", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "ARM", "SMCI", "APP", "RDDT", "HIMS", "ASTS", "IONQ"]
     full_list = list(set(raw_tickers + growth_adds))
     
     valid_tickers = []
     
+    # 抓取大盤數據用於計算 Beta
     try:
         spy = yf.Ticker("SPY").history(period="1y")
         if spy.empty: return []
@@ -68,23 +71,28 @@ def auto_select_candidates():
     
     for ticker in full_list:
         try:
+            # 優化：先檢查市值 (速度快)
             try:
                 info = yf.Ticker(ticker).fast_info
                 if info.market_cap < 3_000_000_000: continue
             except: pass
 
+            # 抓 K 線
             df = yf.Ticker(ticker).history(period="1y")
             if df is None or len(df) < 200: continue
             
+            # A. 股價 > 200MA
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
             if close < sma200: continue 
             
+            # B. 30日成交額 > 900M
             avg_vol = df['Volume'].tail(30).mean()
             avg_price = df['Close'].tail(30).mean()
             dollar_vol = avg_vol * avg_price
             if dollar_vol < 900_000_000: continue 
             
+            # C. Beta >= 1
             stock_returns = df['Close'].pct_change().dropna()
             beta = calculate_beta(stock_returns, spy_returns)
             if beta < 1.0: continue
@@ -270,7 +278,7 @@ def calculate_smc(df):
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, False
 
-# --- 8. 繪圖核心 ---
+# --- 8. 繪圖核心 (升級版：含成交量 + 均線) ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#0f172a')
@@ -287,56 +295,74 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
     try:
         plt.close('all')
         if df is None or len(df) < 5: return create_error_image("No Data")
-        plot_df = df.tail(60).copy()
+        
+        # 抓取數據並畫圖，這裡使用 tail(80) 讓均線有足夠數據顯示
+        plot_df = df.tail(80).copy()
         
         entry = float(entry) if not np.isnan(entry) else plot_df['Close'].iloc[-1]
         sl = float(sl) if not np.isnan(sl) else plot_df['Low'].min()
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
 
-        mc = mpf.make_marketcolors(up='#10b981', down='#ef4444', edge='inherit', wick='inherit', volume='in')
+        # 設定外觀風格
+        mc = mpf.make_marketcolors(up='#10b981', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#1f2937', 'down':'#1f2937'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#1e293b', facecolor='#0f172a')
         
-        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=False,
-            title=dict(title=f"{ticker} - {title}", color='white', size=10),
-            figsize=(5, 3), returnfig=True)
+        # 繪圖 (啟用 volume=True, mav畫出均線)
+        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, 
+            mav=(50, 200), 
+            title=dict(title=f"{ticker} - {title}", color='white', size=12, weight='bold'),
+            figsize=(6, 4), # 放大圖片
+            panel_ratios=(7, 2), 
+            scale_width_adjustment=dict(candle=1.2), 
+            returnfig=True,
+            tight_layout=True)
         
         ax = axlist[0]
         x_min, x_max = ax.get_xlim()
         
+        # FVG
         for i in range(2, len(plot_df)):
             idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
                 bot, top = plot_df['High'].iloc[i-2], plot_df['Low'].iloc[i]
-                rect = patches.Rectangle((idx, bot), x_max - idx, top - bot, linewidth=0, facecolor='#10b981', alpha=0.25)
-                ax.add_patch(rect)
+                if (top - bot) > (plot_df['Close'].mean() * 0.002):
+                    rect = patches.Rectangle((idx-0.4, bot), 10, top - bot, linewidth=0, facecolor='#10b981', alpha=0.15)
+                    ax.add_patch(rect)
             elif plot_df['High'].iloc[i] < plot_df['Low'].iloc[i-2]:
                 bot, top = plot_df['High'].iloc[i], plot_df['Low'].iloc[i-2]
-                rect = patches.Rectangle((idx, bot), x_max - idx, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.25)
-                ax.add_patch(rect)
+                if (top - bot) > (plot_df['Close'].mean() * 0.002):
+                    rect = patches.Rectangle((idx-0.4, bot), 10, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.15)
+                    ax.add_patch(rect)
 
+        # 標記 Sweep
         if found_sweep:
             lowest = plot_df['Low'].min()
-            ax.text(x_min + 2, lowest, "💧 SWEEP", color='#fbbf24', fontsize=12, fontweight='bold', va='bottom')
+            ax.annotate("🔥 SWEEP", xy=(x_max-3, lowest), xytext=(x_max-3, lowest*0.98),
+                        arrowprops=dict(facecolor='#fbbf24', shrink=0.05),
+                        color='#fbbf24', fontsize=9, fontweight='bold', ha='center')
 
+        # 入場線
         line_style = ':' if is_wait else '-'
-        ax.axhline(tp, color='#10b981', linestyle=line_style, linewidth=1)
-        ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1)
-        ax.axhline(sl, color='#ef4444', linestyle=line_style, linewidth=1)
+        ax.axhline(tp, color='#10b981', linestyle=line_style, linewidth=1, alpha=0.7)
+        ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1, alpha=0.9)
+        ax.axhline(sl, color='#ef4444', linestyle=line_style, linewidth=1, alpha=0.7)
         
         ax.text(x_min, tp, " TP", color='#10b981', fontsize=8, va='bottom', fontweight='bold')
         ax.text(x_min, entry, " ENTRY", color='#3b82f6', fontsize=8, va='bottom', fontweight='bold')
         ax.text(x_min, sl, " SL", color='#ef4444', fontsize=8, va='top', fontweight='bold')
 
         if not is_wait:
-            ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#10b981', alpha=0.1))
-            ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.1))
+            ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#10b981', alpha=0.05))
+            ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.05))
 
         buf = BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=80)
+        fig.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=90)
         plt.close(fig)
         buf.seek(0)
         return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
-    except: return create_error_image("Plot Error")
+    except Exception as e: 
+        print(f"Plot Error: {e}")
+        return create_error_image("Plot Error")
 
 # --- 9. 單一股票處理 ---
 def process_ticker(t, app_data_dict, market_bonus):
@@ -400,7 +426,6 @@ def process_ticker(t, app_data_dict, market_bonus):
             reason = "無FVG/Sweep" if (not found_fvg and not found_sweep) else ("逆勢" if not is_bullish else "溢價區")
             ai_html = f"<div class='deploy-box wait'><div class='deploy-title'>⏳ WAIT</div><div>狀態: {reason}</div></div>"
             
-        # 注意這裡：現在我們把 rvol 存進 APP_DATA 以便顯示
         app_data_dict[t] = {"signal": signal, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol}
         return {"ticker": t, "price": curr, "signal": signal, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
     except Exception as e:
@@ -431,7 +456,6 @@ def main():
         for t in tickers:
             if t in APP_DATA:
                 data = APP_DATA[t]
-                # 這裡也要存 rvol
                 sector_results.append({'ticker': t, 'score': data['score'], 'rvol': data.get('rvol', 0)})
             else:
                 res = process_ticker(t, APP_DATA, market_bonus)
@@ -445,16 +469,15 @@ def main():
             if t not in APP_DATA: continue
             data = APP_DATA[t]
             
-            # --- 🚀 卡片顯示成交量邏輯 ---
+            # --- 顯示成交量邏輯 ---
             rvol_val = item['rvol']
             rvol_str = f"Vol {rvol_val:.1f}x"
-            rvol_html = f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>" # 默認灰色
+            rvol_html = f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
             
             if rvol_val > 1.5:
-                rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>" # 粉紅+火
+                rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>"
             elif rvol_val > 1.2:
-                rvol_html = f"<span style='color:#fbbf24;font-size:0.8rem'>{rvol_str} ⚡</span>" # 黃色+電
-            # ---------------------------
+                rvol_html = f"<span style='color:#fbbf24;font-size:0.8rem'>{rvol_str} ⚡</span>"
 
             cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'><span class='badge {('b-long' if data['signal']=='LONG' else 'b-wait')}'>{data['signal']}</span></div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span style='font-size:0.8rem;color:{('#10b981' if item['score']>=85 else '#3b82f6')}'>Score {item['score']}</span>{rvol_html}</div></div>"
             
