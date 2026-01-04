@@ -18,13 +18,20 @@ from datetime import datetime, timedelta
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 
-# --- 1. 觀察清單 ---
-
-# 🔥🔥🔥【每日更新區】從 Colab 複製出來的文字直接貼在下面引號內 🔥🔥🔥
-TEMP_WATCHLIST_RAW = "IRWD, SKYT, SLS, PEPG, TROO, CTRN, BCAR, ARDX, RCAT, MLAC, SNDK, ONDS, VELO, APLD, TIGR, FLNC, SERV, ACMR, FTAI, ZURA"
-
-# 系統會自動把上面的文字轉換成 Python 列表
-TEMP_WATCHLIST = [x.strip() for x in TEMP_WATCHLIST_RAW.split(',') if x.strip()]
+# 🔥🔥🔥【自動掃描池】GitHub 會自己掃描這些股票，找出符合條件的 🔥🔥🔥
+# 這裡我幫你放入了 Nasdaq 100 和熱門股，你可以隨時增加
+SCAN_UNIVERSE = [
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AMD", "NFLX", "INTC",
+    "QCOM", "TXN", "HON", "AMGN", "SBUX", "ADP", "GILD", "INTU", "ISRG", "MDLZ",
+    "BKNG", "VRTX", "REGN", "PYPL", "ADI", "KLAC", "LRCX", "PANW", "SNPS", "CDNS",
+    "CHTR", "MAR", "CSX", "ORLY", "ASML", "NXPI", "CTAS", "MNST", "ODFL", "PCAR",
+    "MELI", "ROST", "KDP", "PAYX", "MCHP", "IDXX", "AEP", "LULU", "EXC", "BKR",
+    "FAST", "EA", "CTSH", "VRSK", "XEL", "GEHC", "CSGP", "BIIB", "ON", "DXCM",
+    "ANSS", "TEAM", "GFS", "DLTR", "TTD", "WBD", "FANG", "ILMN", "ALGN", "WBA",
+    "ZM", "ZS", "CRWD", "DDOG", "NET", "PLTR", "SOFI", "COIN", "MARA", "MSTR",
+    "SMCI", "ARM", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "AFRM",
+    "UPST", "AI", "IONQ", "PLUG", "LCID", "RIVN", "NIO", "XPEV", "LI", "BABA"
+]
 
 SECTORS = {
     "🔥 熱門交易": ["NVDA", "TSLA", "AAPL", "AMD", "PLTR", "SOFI", "MARA", "MSTR", "SMCI", "COIN"],
@@ -34,6 +41,40 @@ SECTORS = {
     "🏦 金融與消費": ["JPM", "V", "COST", "MCD", "NKE", "LLY", "WMT", "DIS", "SBUX"],
     "📉 指數 ETF": ["SPY", "QQQ", "IWM", "TQQQ", "SQQQ"]
 }
+
+# --- 1. 自動篩選邏輯 (移植自你的 Colab) ---
+def auto_scan_market():
+    print(f"🚀 啟動自動掃描... 目標: {len(SCAN_UNIVERSE)} 隻股票")
+    valid_tickers = []
+    
+    for ticker in SCAN_UNIVERSE:
+        try:
+            # 簡單抓取數據，不用太長，速度第一
+            df = yf.Ticker(ticker).history(period="3mo", interval="1d")
+            if df is None or len(df) < 50: continue
+            
+            # 1. 取得關鍵數據
+            close = df['Close'].iloc[-1]
+            sma50 = df['Close'].rolling(50).mean().iloc[-1]
+            
+            # 2. 強勢過濾：股價必須在 50MA 之上 (多頭趨勢)
+            if close < sma50: continue
+
+            # 3. 爆量計算 (RVOL)
+            vol_ma = df['Volume'].rolling(20).mean().iloc[-1]
+            curr_vol = df['Volume'].iloc[-1]
+            rvol = curr_vol / vol_ma if vol_ma > 0 else 0
+            
+            # 4. 條件：只要是多頭趨勢且有量 (RVOL > 1.0) 就列入觀察
+            # 或者你可以放寬條件，只要是多頭就列入
+            if rvol > 0.8: 
+                print(f"   ✨ {ticker} 符合條件 (RVOL: {rvol:.2f})")
+                valid_tickers.append(ticker)
+        except:
+            continue
+            
+    print(f"✅ 掃描完成，共找到 {len(valid_tickers)} 隻潛力股")
+    return valid_tickers
 
 # --- 2. 新聞 ---
 def get_polygon_news():
@@ -86,20 +127,17 @@ def fetch_data_safe(ticker, period, interval):
         return dat
     except: return None
 
-# --- 5. 技術指標 (RSI, RVOL) ---
+# --- 5. 技術指標 ---
 def calculate_indicators(df):
-    # RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     
-    # RVOL (相對成交量)
     vol_ma = df['Volume'].rolling(10).mean()
     rvol = df['Volume'] / vol_ma
     
-    # Golden Cross
     sma50 = df['Close'].rolling(50).mean()
     sma200 = df['Close'].rolling(200).mean()
     golden_cross = False
@@ -107,10 +145,8 @@ def calculate_indicators(df):
         if sma50.iloc[-1] > sma200.iloc[-1] and sma50.iloc[-5] <= sma200.iloc[-5]:
             golden_cross = True
             
-    # Trend
     trend_bullish = sma50.iloc[-1] > sma200.iloc[-1] if len(sma200) > 0 else False
     
-    # Perf
     if len(df) > 30:
         perf_30d = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30] * 100
     else:
@@ -125,13 +161,11 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
         reasons = []
         rsi, rvol, golden_cross, trend, perf_30d = indicators
         
-        # Strategies
         strategies = 0
         if found_sweep: strategies += 1
         if golden_cross: strategies += 1
         if 40 <= rsi.iloc[-1] <= 55: strategies += 1
         
-        # RR
         risk = entry - sl
         reward = tp - entry
         rr = reward / risk if risk > 0 else 0
@@ -142,31 +176,26 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
             score += 10
             reasons.append(f"💰 盈虧比優秀 ({rr:.1f}R)")
 
-        # RSI
         curr_rsi = rsi.iloc[-1]
         if 40 <= curr_rsi <= 55: 
             score += 10
             reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
         elif curr_rsi > 70: score -= 15
 
-        # RVOL
         curr_rvol = rvol.iloc[-1]
         if curr_rvol > 1.5:
             score += 10
             reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
         elif curr_rvol > 1.1: score += 5
 
-        # Sweep (重點加分)
         if found_sweep:
             score += 20
             reasons.append("💧 觸發流動性獵殺 (Sweep)")
             
-        # Golden Cross
         if golden_cross:
             score += 10
             reasons.append("✨ 出現黃金交叉")
 
-        # Distance
         close = df['Close'].iloc[-1]
         dist_pct = abs(close - entry) / entry
         if dist_pct < 0.01: 
@@ -183,14 +212,13 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
         return min(max(int(score), 0), 99), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
 
-# --- 7. SMC 運算 (增強版 Sweep) ---
+# --- 7. SMC 運算 ---
 def calculate_smc(df):
     try:
         window = 50
         recent = df.tail(window)
         bsl = float(recent['High'].max())
         ssl_long = float(recent['Low'].min())
-        ssl_short = float(recent['Low'].tail(5).min())
         
         eq = (bsl + ssl_long) / 2
         
@@ -199,16 +227,15 @@ def calculate_smc(df):
         found_sweep = False
         
         last_3 = recent.tail(3)
-        check_low = recent['Low'].iloc[:-3].tail(10).min() # 檢查過去10天的低點
+        check_low = recent['Low'].iloc[:-3].tail(10).min()
         
         for i in range(len(last_3)):
             candle = last_3.iloc[i]
             if candle['Low'] < check_low and candle['Close'] > check_low:
                 found_sweep = True
-                best_entry = check_low # 獵殺點即入場點
+                best_entry = check_low
                 break
         
-        # 2. 偵測 FVG
         for i in range(2, len(recent)):
             if recent['Low'].iloc[i] > recent['High'].iloc[i-2]:
                 fvg = float(recent['Low'].iloc[i])
@@ -255,19 +282,17 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
         ax = axlist[0]
         x_min, x_max = ax.get_xlim()
         
-        # FVG
         for i in range(2, len(plot_df)):
             idx = i - 1
-            if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: # Bullish
+            if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
                 bot, top = plot_df['High'].iloc[i-2], plot_df['Low'].iloc[i]
                 rect = patches.Rectangle((idx, bot), x_max - idx, top - bot, linewidth=0, facecolor='#10b981', alpha=0.25)
                 ax.add_patch(rect)
-            elif plot_df['High'].iloc[i] < plot_df['Low'].iloc[i-2]: # Bearish
+            elif plot_df['High'].iloc[i] < plot_df['Low'].iloc[i-2]:
                 bot, top = plot_df['High'].iloc[i], plot_df['Low'].iloc[i-2]
                 rect = patches.Rectangle((idx, bot), x_max - idx, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.25)
                 ax.add_patch(rect)
 
-        # 標記 Sweep
         if found_sweep:
             lowest = plot_df['Low'].min()
             ax.text(x_min + 2, lowest, "💧 SWEEP", color='#fbbf24', fontsize=12, fontweight='bold', va='bottom')
@@ -295,7 +320,8 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
 # --- 9. 單一股票處理 ---
 def process_ticker(t, app_data_dict, market_bonus):
     try:
-        time.sleep(0.3)
+        # 如果不是自動掃描的，加一點延遲避免 API 限制
+        time.sleep(0.1)
         df_d = fetch_data_safe(t, "1y", "1d")
         if df_d is None or len(df_d) < 50: return None
         df_h = fetch_data_safe(t, "1mo", "1h")
@@ -375,7 +401,7 @@ def process_ticker(t, app_data_dict, market_bonus):
 
 # --- 10. 主程式 ---
 def main():
-    print("🚀 Starting Analysis (with Temporary Watchlist Filter)...")
+    print("🚀 Starting Fully Automated Analysis...")
     weekly_news_html = get_polygon_news()
     
     market_status, market_text, market_bonus = get_market_condition()
@@ -384,78 +410,40 @@ def main():
     APP_DATA, sector_html_blocks, screener_rows_list = {}, "", []
 
     # ==========================================
-    # 🔥 1. 先處理暫時清單 (過濾機制)
+    # 🔥 1. 執行自動掃描 (取代手動清單)
     # ==========================================
-    if TEMP_WATCHLIST:
-        print(f"🔎 Scanning {len(TEMP_WATCHLIST)} temp stocks for setups...")
-        valid_temp_stocks = []
-        
-        for t in TEMP_WATCHLIST:
-            # 先跑跑看
-            res = process_ticker(t, APP_DATA, market_bonus)
-            
-            if res:
-                # 🛑 過濾邏輯：如果是 WAIT，就把它殺掉，節省空間
-                if res['signal'] == "WAIT":
-                    # 從 APP_DATA 移除 (因為 process_ticker 會自動加進去)
-                    if t in APP_DATA:
-                        del APP_DATA[t]
-                    print(f"   🗑️ {t} is WAIT -> Removed.")
-                else:
-                    # ✅ 如果是 LONG，保留下來
-                    valid_temp_stocks.append(t)
-                    screener_rows_list.append(res) # 加入篩選器表格
-                    print(f"   ✨ {t} is LONG! Kept.")
-        
-        # 如果有合格的股票，把它們加入到 SECTORS 讓後面顯示
-        if valid_temp_stocks:
-            SECTORS["👀 每日快篩 (LONG Only)"] = valid_temp_stocks
+    auto_picked_tickers = auto_scan_market()
     
+    # 這裡將掃描到的股票設為 "每日快篩" 清單
+    if auto_picked_tickers:
+        SECTORS["👀 自動快篩 (AI Scanned)"] = auto_picked_tickers
+        print(f"✅ 自動快篩區已建立: 包含 {len(auto_picked_tickers)} 隻股票")
+
     # ==========================================
-    # 🔥 2. 處理原本的固定板塊
+    # 🔥 2. 處理所有板塊 (包含自動快篩)
     # ==========================================
     for sector, tickers in SECTORS.items():
-        # 如果是剛剛已經跑過的快篩區，就只產生 HTML，不重新跑 process_ticker
-        if sector == "👀 每日快篩 (LONG Only)":
-            # 這些股票已經在 APP_DATA 裡了，直接產生卡片
-            pass 
-        else:
-            # 原本的固定名單，全部都跑 (不管 wait 或 long)
-            valid_tickers_for_loop = tickers
-        
         cards = ""
         sector_results = []
         
-        # 對這個板塊的每一隻股票
         for t in tickers:
-            # 檢查是否已經有資料 (可能是快篩跑過的)
+            # 檢查是否已經有資料 (避免重複跑)
             if t in APP_DATA:
-                # 直接拿資料
-                res = {
-                    "ticker": t,
-                    "price": float(APP_DATA[t]["deploy"].split("Entry: $")[1].split("<")[0]) if "Entry" in APP_DATA[t]["deploy"] else 0, # 簡化抓取
-                    "signal": APP_DATA[t]["signal"],
-                    "cls": "b-long" if APP_DATA[t]["signal"]=="LONG" else "b-wait",
-                    "score": APP_DATA[t]["score"],
-                    "rvol": 0, # 簡化
-                    "perf": 0
-                }
-                pass
+                # 簡單提取資料
+                data = APP_DATA[t]
+                res_obj = {'ticker': t, 'score': data['score']}
+                sector_results.append(res_obj)
             else:
                 # 沒資料才跑
                 res = process_ticker(t, APP_DATA, market_bonus)
-                if res and res['signal'] == "LONG":
-                      screener_rows_list.append(res)
-            
-            # 從 APP_DATA 讀取最終顯示資訊 (確保資料一致)
-            if t in APP_DATA:
-                data = APP_DATA[t]
-                # 這裡重新建構 res 物件給排序用
-                score = data['score']
-                res_obj = {'ticker': t, 'score': score}
-                sector_results.append(res_obj)
-
-        # 排序並產生 HTML
+                if res:
+                    # 如果是 LONG 訊號，加入到篩選列表
+                    if res['signal'] == "LONG":
+                        screener_rows_list.append(res)
+                    # 加入到板塊結果
+                    sector_results.append({'ticker': t, 'score': res['score']})
+        
+        # 排序
         sector_results.sort(key=lambda x: x['score'], reverse=True)
         
         for item in sector_results:
@@ -473,8 +461,7 @@ def main():
             
         if cards: sector_html_blocks += f"<h3 class='sector-title'>{sector}</h3><div class='grid'>{cards}</div>"
 
-    # 修正 Screener 排序
-    # 因為 screener_rows_list 可能有重複 (如果股票同時在 TEMP 和 SECTORS)，去重
+    # 去重篩選器列表
     seen = set()
     unique_screener = []
     for r in screener_rows_list:
@@ -598,22 +585,20 @@ def main():
             const tickerEl = document.getElementById('m-ticker');
             tickerEl.innerText = ticker;
             
-            // --- 👇 新增：TradingView 按鈕 ---
-            // 檢查是否已經有這個按鈕，沒有才加，避免重複
-            let tvBtn = document.getElementById('tv-btn');
-            if (!tvBtn) {{
-                const btnContainer = tickerEl.parentNode.querySelector('div'); // 找到 Copy 按鈕的那個容器
-                const newBtn = document.createElement('button');
-                newBtn.id = 'tv-btn';
-                newBtn.innerText = '📈 Chart';
-                newBtn.style.cssText = 'margin-left:10px; background:#2962FF; border:none; color:white; padding:5px 12px; border-radius:5px; cursor:pointer; font-weight:bold;';
-                newBtn.onclick = function() {{
-                    const currentTicker = document.getElementById('m-ticker').innerText;
-                    window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
-                }};
-                if(btnContainer) btnContainer.appendChild(newBtn);
-            }}
-            // -------------------------------
+            // 讓 TradingView 按鈕每次打開都重新生成，避免重複
+            let btnContainer = tickerEl.parentNode.querySelector('div');
+            let oldTvBtn = document.getElementById('tv-btn');
+            if (oldTvBtn) oldTvBtn.remove(); // 刪除舊的
+
+            const newBtn = document.createElement('button');
+            newBtn.id = 'tv-btn';
+            newBtn.innerText = '📈 Chart';
+            newBtn.style.cssText = 'margin-left:10px; background:#2962FF; border:none; color:white; padding:5px 12px; border-radius:5px; cursor:pointer; font-weight:bold;';
+            newBtn.onclick = function() {{
+                const currentTicker = document.getElementById('m-ticker').innerText;
+                window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
+            }};
+            if(btnContainer) btnContainer.appendChild(newBtn);
 
             document.getElementById('m-deploy').innerHTML = data.deploy;
             document.getElementById('chart-d').innerHTML = '<img src="'+data.img_d+'">';
