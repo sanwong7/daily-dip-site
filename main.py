@@ -227,4 +227,134 @@ def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#0f172a')
     ax.set_facecolor('#0f172a')
-    ax.text(0.5, 0.5, msg, color='white', ha='center', va
+    ax.text(0.5, 0.5, msg, color='white', ha='center', va='center')
+    ax.axis('off')
+    buf = BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight', facecolor='#0f172a')
+    plt.close(fig)
+    buf.seek(0)
+    return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+
+def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
+    try:
+        plt.close('all')
+        if df is None or len(df) < 5: return create_error_image("No Data")
+        plot_df = df.tail(60).copy()
+        
+        entry = float(entry) if not np.isnan(entry) else plot_df['Close'].iloc[-1]
+        sl = float(sl) if not np.isnan(sl) else plot_df['Low'].min()
+        tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
+
+        mc = mpf.make_marketcolors(up='#10b981', down='#ef4444', edge='inherit', wick='inherit', volume='in')
+        s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#1e293b', facecolor='#0f172a')
+        
+        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=False,
+            title=dict(title=f"{ticker} - {title}", color='white', size=10),
+            figsize=(5, 3), returnfig=True)
+        
+        ax = axlist[0]
+        x_min, x_max = ax.get_xlim()
+        
+        # FVG
+        for i in range(2, len(plot_df)):
+            idx = i - 1
+            if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: # Bullish
+                bot, top = plot_df['High'].iloc[i-2], plot_df['Low'].iloc[i]
+                rect = patches.Rectangle((idx, bot), x_max - idx, top - bot, linewidth=0, facecolor='#10b981', alpha=0.25)
+                ax.add_patch(rect)
+            elif plot_df['High'].iloc[i] < plot_df['Low'].iloc[i-2]: # Bearish
+                bot, top = plot_df['High'].iloc[i], plot_df['Low'].iloc[i-2]
+                rect = patches.Rectangle((idx, bot), x_max - idx, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.25)
+                ax.add_patch(rect)
+
+        # 標記 Sweep
+        if found_sweep:
+            lowest = plot_df['Low'].min()
+            ax.text(x_min + 2, lowest, "💧 SWEEP", color='#fbbf24', fontsize=12, fontweight='bold', va='bottom')
+
+        line_style = ':' if is_wait else '-'
+        ax.axhline(tp, color='#10b981', linestyle=line_style, linewidth=1)
+        ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1)
+        ax.axhline(sl, color='#ef4444', linestyle=line_style, linewidth=1)
+        
+        ax.text(x_min, tp, " TP", color='#10b981', fontsize=8, va='bottom', fontweight='bold')
+        ax.text(x_min, entry, " ENTRY", color='#3b82f6', fontsize=8, va='bottom', fontweight='bold')
+        ax.text(x_min, sl, " SL", color='#ef4444', fontsize=8, va='top', fontweight='bold')
+
+        if not is_wait:
+            ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#10b981', alpha=0.1))
+            ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.1))
+
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=80)
+        plt.close(fig)
+        buf.seek(0)
+        return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+    except: return create_error_image("Plot Error")
+
+# --- 9. 單一股票處理 ---
+def process_ticker(t, app_data_dict, market_bonus):
+    try:
+        time.sleep(0.3)
+        df_d = fetch_data_safe(t, "1y", "1d")
+        if df_d is None or len(df_d) < 50: return None
+        df_h = fetch_data_safe(t, "1mo", "1h")
+        if df_h is None or df_h.empty: df_h = df_d
+
+        curr = float(df_d['Close'].iloc[-1])
+        sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
+        if pd.isna(sma200): sma200 = curr
+
+        bsl, ssl, eq, entry, sl, found_fvg, found_sweep = calculate_smc(df_d)
+        tp = bsl
+
+        is_bullish = curr > sma200
+        in_discount = curr < eq
+        signal = "LONG" if (is_bullish and in_discount and (found_fvg or found_sweep)) else "WAIT"
+        
+        indicators = calculate_indicators(df_d)
+        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, found_sweep, indicators)
+        
+        is_wait = (signal == "WAIT")
+        img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, found_sweep)
+        img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, found_sweep)
+
+        cls = "b-long" if signal == "LONG" else "b-wait"
+        score_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
+        
+        elite_html = ""
+        if score >= 85 or found_sweep or rvol > 1.5:
+            reasons_html = "".join([f"<li>✅ {r}</li>" for r in reasons])
+            
+            confluence_text = ""
+            if strategies >= 2:
+                confluence_text = f"🔥 <b>策略共振：</b> 同時觸發 {strategies} 種訊號，可靠度極高。"
+            
+            sweep_text = ""
+            if found_sweep:
+                sweep_text = """
+                <div style='margin-top:8px; padding:8px; background:rgba(251,191,36,0.1); border-left:3px solid #fbbf24; color:#fcd34d; font-size:0.85rem;'>
+                    <b>⚠️ 偵測到流動性獵殺 (Sweep)：</b><br>
+                    這是勝率最高的翻轉訊號。<br>
+                    策略價值：讓你買在「別人止損」的地方，取得比單純 FVG 更好的入場價格。
+                </div>
+                """
+            
+            elite_html = f"""
+            <div style='background:rgba(16,185,129,0.1); border:1px solid #10b981; padding:12px; border-radius:8px; margin:10px 0;'>
+                <div style='font-weight:bold; color:#10b981; margin-bottom:5px;'>💎 AI 戰略分析 (Score {score})</div>
+                <div style='font-size:0.85rem; color:#e2e8f0; margin-bottom:8px;'>{confluence_text}</div>
+                <ul style='margin:0; padding-left:20px; font-size:0.8rem; color:#d1d5db;'>{reasons_html}</ul>
+                {sweep_text}
+            </div>
+            """
+        
+        if signal == "LONG":
+            ai_html = f"""
+            <div class='deploy-box long'>
+                <div class='deploy-title'>✅ LONG SETUP</div>
+                <div style='display:flex;justify-content:space-between;border-bottom:1px solid #333;padding-bottom:5px;margin-bottom:5px;'>
+                    <span>🏆 評分: <b style='color:{score_color};font-size:1.1em'>{score}</b></span>
+                    <span>💰 RR: <b style='color:#10b981'>{rr:.1f}R</b></span>
+                </div>
+                <div style='font-size:0.8rem; color:#94a3b8; margin-bottom:5px;'>📈 近30日績效: {perf_30d
