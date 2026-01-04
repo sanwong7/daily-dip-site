@@ -1,157 +1,3 @@
-import yfinance as yf
-import pandas as pd
-import time
-from IPython.display import display, HTML
-
-
-# --- 設定 ---
-CSV_FILE = "nasdaq_mid_large_caps (2).csv"
-
-
-# --- 核心分析邏輯 ---
-def check_stock(ticker):
-    try:
-        # 只抓過去 3 個月的資料 (速度最快)
-        df = yf.Ticker(ticker).history(period="3mo", interval="1d")
-        if df is None or len(df) < 50: return None
-        
-        # 1. 取得關鍵數據
-        close = df['Close'].iloc[-1]
-        prev_close = df['Close'].iloc[-2]
-        sma50 = df['Close'].rolling(50).mean().iloc[-1]
-        
-        # 2. 強勢過濾：股價必須在 50MA 之上 (多頭趨勢)
-        # 如果是空頭走勢，直接淘汰，不浪費時間看
-        if close < sma50: return None
-
-
-        # 3. 爆量計算 (RVOL)
-        vol_ma = df['Volume'].rolling(20).mean().iloc[-1]
-        curr_vol = df['Volume'].iloc[-1]
-        rvol = curr_vol / vol_ma if vol_ma > 0 else 0
-        
-        # 4. 漲跌幅
-        change_pct = ((close - prev_close) / prev_close) * 100
-        
-        # 5. 評分機制 (Score)
-        # 爆量越強分越高，漲幅越大分越高
-        score = (rvol * 20) + (change_pct * 2)
-        
-        return {
-            "Ticker": ticker,
-            "Price": close,
-            "Change%": change_pct,
-            "RVOL": rvol,
-            "Score": score,
-            "SMA50_Dist": (close - sma50) / sma50 * 100 # 離均線多遠
-        }
-    except:
-        return None
-
-
-# --- 主程式 ---
-print("🚀 啟動全市場掃描... 正在尋找今日最強的 20 隻股票...")
-print("⏳ 因為要掃描 1500 隻，這大約需要 3~5 分鐘，請耐心等待...")
-
-
-try:
-    df_csv = pd.read_csv(CSV_FILE)
-    tickers = df_csv['Stock Ticker'].dropna().astype(str).tolist()
-except:
-    print("❌ 錯誤：找不到 CSV 檔案！請確認已上傳 nasdaq_mid_large_caps (2).csv")
-    tickers = []
-
-
-results = []
-start_time = time.time()
-
-
-# 開始掃描
-for i, t in enumerate(tickers):
-    # 每掃 50 隻顯示一次進度，讓你確認它活著
-    if i % 50 == 0: 
-        elapsed = int(time.time() - start_time)
-        print(f"🔎 已掃描 {i}/{len(tickers)} 隻... (耗時 {elapsed}s)")
-    
-    res = check_stock(t)
-    if res:
-        results.append(res)
-
-
-print(f"\n✅ 掃描完成！總耗時: {int(time.time() - start_time)} 秒")
-
-
-# --- 顯示與輸出 Top 20 ---
-if results:
-    # 轉成表格
-    df_res = pd.DataFrame(results)
-    
-    # 排序：根據 'Score' (綜合爆量與漲幅) 由高到低
-    df_top20 = df_res.sort_values(by="Score", ascending=False).head(20)
-    
-    # 顯示漂亮的 HTML 表格 (方便你複製)
-    print("\n🏆 今日 Top 20 爆量強勢股名單：")
-    
-    html_table = """
-    <style>
-        table {border-collapse: collapse; width: 100%; font-family: Arial;}
-        th {background-color: #3b82f6; color: white; padding: 10px; text-align: left;}
-        td {border-bottom: 1px solid #ddd; padding: 8px;}
-        tr:nth-child(even) {background-color: #f2f2f2;}
-        .pos {color: green; font-weight: bold;}
-        .fire {color: red; font-weight: bold;}
-    </style>
-    <h3>🔥 Nasdaq Mid/Large Cap - Daily Top 20</h3>
-    <table>
-    <tr><th>Rank</th><th>Ticker</th><th>Price</th><th>Change</th><th>RVOL (爆量)</th><th>Trend</th></tr>
-    """
-    
-    rank = 1
-    for _, row in df_top20.iterrows():
-        change_color = "pos" if row['Change%'] > 0 else "neg"
-        fire_tag = "🔥" if row['RVOL'] > 1.5 else ""
-        rvol_display = f"{row['RVOL']:.2f}x {fire_tag}"
-        trend_desc = f"均線上 {row['SMA50_Dist']:.1f}%"
-        
-        html_table += f"""
-        <tr>
-            <td>#{rank}</td>
-            <td><b>{row['Ticker']}</b></td>
-            <td>${row['Price']:.2f}</td>
-            <td class='{change_color}'>{row['Change%']:+.2f}%</td>
-            <td class='fire'>{rvol_display}</td>
-            <td>{trend_desc}</td>
-        </tr>
-        """
-        rank += 1
-    
-    html_table += "</table>"
-    display(HTML(html_table))
-    
-    # 提供純文字清單方便複製
-    print("\n📋 純文字清單 (方便複製貼上):")
-    print(", ".join(df_top20['Ticker'].tolist()))
-
-
-else:
-    print("⚠️ 很奇怪，今天完全沒有符合條件的股票 (可能是 API 問題或市場極度冷清)。")
-
-
-
-
-
-
-
-
-
-
-
-
-每日手動scan 完google colab 
-手動加返入下面條code 既temp list
-
-
-GitHub Code
 import os
 import matplotlib
 # 1. 強制設定後台繪圖 (最優先)
@@ -169,21 +15,17 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
 
-
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 
+# --- 1. 觀察清單 (這是你要修改的地方) ---
 
-# --- 1. 觀察清單 ---
+# 🔥🔥🔥【每日更新區】從 Colab 複製出來的文字直接貼在下面引號內 🔥🔥🔥
+# 格式範例: "AAPL, TSLA, NVDA, AMD" (不用管引號或括號，直接貼純文字)
+TEMP_WATCHLIST_RAW = "IRWD, SKYT, SLS, PEPG, TROO, CTRN, BCAR, ARDX, RCAT, MLAC, SNDK, ONDS, VELO, APLD, TIGR, FLNC, SERV, ACMR, FTAI, ZURA"
 
-
-# 🔥🔥🔥【每日更新區】把你想測試的股票放在這裡 🔥🔥🔥
-# 系統會自動掃描這些股票，如果是 WAIT 就會自動丟棄，不佔空間
-TEMP_WATCHLIST = [
-    "IRWD", "SKYT", "SLS", "PEPG", "TROO", "CTRN", "BCAR", "ARDX", "RCAT", "MLAC", 
-    "SNDK", "ONDS", "VELO", "APLD", "TIGR", "FLNC", "SERV", "ACMR", "FTAI", "ZURA"
-]
-
+# 系統會自動把上面的文字轉換成 Python 列表
+TEMP_WATCHLIST = [x.strip() for x in TEMP_WATCHLIST_RAW.split(',') if x.strip()]
 
 SECTORS = {
     "🔥 熱門交易": ["NVDA", "TSLA", "AAPL", "AMD", "PLTR", "SOFI", "MARA", "MSTR", "SMCI", "COIN"],
@@ -193,7 +35,6 @@ SECTORS = {
     "🏦 金融與消費": ["JPM", "V", "COST", "MCD", "NKE", "LLY", "WMT", "DIS", "SBUX"],
     "📉 指數 ETF": ["SPY", "QQQ", "IWM", "TQQQ", "SQQQ"]
 }
-
 
 # --- 2. 新聞 ---
 def get_polygon_news():
@@ -214,7 +55,6 @@ def get_polygon_news():
     except: news_html = "News Error"
     return news_html
 
-
 # --- 3. 市場大盤分析 ---
 def get_market_condition():
     try:
@@ -223,7 +63,6 @@ def get_market_condition():
         qqq = yf.Ticker("QQQ").history(period="6mo")
         
         if spy.empty or qqq.empty: return "NEUTRAL", "數據不足", 0
-
 
         spy_50 = spy['Close'].rolling(50).mean().iloc[-1]
         spy_curr = spy['Close'].iloc[-1]
@@ -238,7 +77,6 @@ def get_market_condition():
         else: return "NEUTRAL", "🟡 市場震盪", 0
     except: return "NEUTRAL", "Check Failed", 0
 
-
 # --- 4. 數據獲取 ---
 def fetch_data_safe(ticker, period, interval):
     try:
@@ -248,7 +86,6 @@ def fetch_data_safe(ticker, period, interval):
         dat = dat.rename(columns={"Open": "Open", "High": "High", "Low": "Low", "Close": "Close", "Volume": "Volume"})
         return dat
     except: return None
-
 
 # --- 5. 技術指標 (RSI, RVOL) ---
 def calculate_indicators(df):
@@ -282,7 +119,6 @@ def calculate_indicators(df):
     
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
-
 # --- 6. 評分系統 ---
 def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_sweep, indicators):
     try:
@@ -307,7 +143,6 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
             score += 10
             reasons.append(f"💰 盈虧比優秀 ({rr:.1f}R)")
 
-
         # RSI
         curr_rsi = rsi.iloc[-1]
         if 40 <= curr_rsi <= 55: 
@@ -315,14 +150,12 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
             reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
         elif curr_rsi > 70: score -= 15
 
-
         # RVOL
         curr_rvol = rvol.iloc[-1]
         if curr_rvol > 1.5:
             score += 10
             reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
         elif curr_rvol > 1.1: score += 5
-
 
         # Sweep (重點加分)
         if found_sweep:
@@ -333,7 +166,6 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
         if golden_cross:
             score += 10
             reasons.append("✨ 出現黃金交叉")
-
 
         # Distance
         close = df['Close'].iloc[-1]
@@ -346,14 +178,11 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
             score += 5
             reasons.append("📈 長期趨勢向上")
 
-
         if market_bonus > 0: reasons.append("🌍 大盤順風車 (+5)")
         if market_bonus < 0: reasons.append("🌪️ 逆大盤風險 (-10)")
 
-
         return min(max(int(score), 0), 99), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
-
 
 # --- 7. SMC 運算 (增強版 Sweep) ---
 def calculate_smc(df):
@@ -394,7 +223,6 @@ def calculate_smc(df):
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, False
 
-
 # --- 8. 繪圖核心 ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
@@ -408,7 +236,6 @@ def create_error_image(msg):
     buf.seek(0)
     return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
 
-
 def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
     try:
         plt.close('all')
@@ -418,7 +245,6 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
         entry = float(entry) if not np.isnan(entry) else plot_df['Close'].iloc[-1]
         sl = float(sl) if not np.isnan(sl) else plot_df['Low'].min()
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
-
 
         mc = mpf.make_marketcolors(up='#10b981', down='#ef4444', edge='inherit', wick='inherit', volume='in')
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#1e293b', facecolor='#0f172a')
@@ -442,12 +268,10 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
                 rect = patches.Rectangle((idx, bot), x_max - idx, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.25)
                 ax.add_patch(rect)
 
-
         # 標記 Sweep
         if found_sweep:
             lowest = plot_df['Low'].min()
             ax.text(x_min + 2, lowest, "💧 SWEEP", color='#fbbf24', fontsize=12, fontweight='bold', va='bottom')
-
 
         line_style = ':' if is_wait else '-'
         ax.axhline(tp, color='#10b981', linestyle=line_style, linewidth=1)
@@ -458,11 +282,9 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
         ax.text(x_min, entry, " ENTRY", color='#3b82f6', fontsize=8, va='bottom', fontweight='bold')
         ax.text(x_min, sl, " SL", color='#ef4444', fontsize=8, va='top', fontweight='bold')
 
-
         if not is_wait:
             ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#10b981', alpha=0.1))
             ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.1))
-
 
         buf = BytesIO()
         fig.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=80)
@@ -470,7 +292,6 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
         buf.seek(0)
         return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
     except: return create_error_image("Plot Error")
-
 
 # --- 9. 單一股票處理 ---
 def process_ticker(t, app_data_dict, market_bonus):
@@ -481,15 +302,12 @@ def process_ticker(t, app_data_dict, market_bonus):
         df_h = fetch_data_safe(t, "1mo", "1h")
         if df_h is None or df_h.empty: df_h = df_d
 
-
         curr = float(df_d['Close'].iloc[-1])
         sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
         if pd.isna(sma200): sma200 = curr
 
-
         bsl, ssl, eq, entry, sl, found_fvg, found_sweep = calculate_smc(df_d)
         tp = bsl
-
 
         is_bullish = curr > sma200
         in_discount = curr < eq
@@ -501,7 +319,6 @@ def process_ticker(t, app_data_dict, market_bonus):
         is_wait = (signal == "WAIT")
         img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, found_sweep)
         img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, found_sweep)
-
 
         cls = "b-long" if signal == "LONG" else "b-wait"
         score_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
@@ -557,7 +374,6 @@ def process_ticker(t, app_data_dict, market_bonus):
         print(f"Err {t}: {e}")
         return None
 
-
 # --- 10. 主程式 ---
 def main():
     print("🚀 Starting Analysis (with Temporary Watchlist Filter)...")
@@ -567,7 +383,6 @@ def main():
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
     
     APP_DATA, sector_html_blocks, screener_rows_list = {}, "", []
-
 
     # ==========================================
     # 🔥 1. 先處理暫時清單 (過濾機制)
@@ -626,31 +441,20 @@ def main():
                     "rvol": 0, # 簡化
                     "perf": 0
                 }
-                # 重新完整抓取資料比較準確 (因為上面簡化了) -> 其實可以直接存 res 到 APP_DATA
-                # 這裡為了簡單，我們假設快篩的資料已經齊全，我們只需要產生 HTML 卡片
                 pass
             else:
                 # 沒資料才跑
                 res = process_ticker(t, APP_DATA, market_bonus)
                 if res and res['signal'] == "LONG":
-                     screener_rows_list.append(res)
+                      screener_rows_list.append(res)
             
             # 從 APP_DATA 讀取最終顯示資訊 (確保資料一致)
             if t in APP_DATA:
                 data = APP_DATA[t]
                 # 這裡重新建構 res 物件給排序用
-                # 注意：這裡是一個小技巧，因為我們在 process_ticker 回傳了 res，但如果是快篩跑過的，我們沒有 res
-                # 所以我們最好還是用 APP_DATA 裡的數據
-                
-                # 為了避免複雜，我們簡單處理：
-                # 如果是快篩區，我們已經有了結果。如果是普通區，我們剛剛跑了。
-                # 為了顯示排序，我們需要 score。
-                
-                # 重新提取 score 用於排序
                 score = data['score']
                 res_obj = {'ticker': t, 'score': score}
                 sector_results.append(res_obj)
-
 
         # 排序並產生 HTML
         sector_results.sort(key=lambda x: x['score'], reverse=True)
@@ -660,16 +464,8 @@ def main():
             if t not in APP_DATA: continue
             
             data = APP_DATA[t]
-            # 從 deploy HTML 中或是 data 中提取資訊
-            # 為了程式碼簡潔，我們直接用 data 裡的資料
             signal = data['signal']
             score = data['score']
-            
-            # 為了拿到價格和 RVOL，我們需要修改 process_ticker 讓它存更多東西進 APP_DATA
-            # 或者我們簡單點，只顯示分數和訊號
-            
-            # 為了讓顯示完整，我們稍微 hack 一下，從 process_ticker 的 return 值獲取比較好
-            # 但因為邏輯分開了，我們這裡簡單顯示即可
             
             cls = "b-long" if signal == "LONG" else "b-wait"
             s_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
@@ -677,7 +473,6 @@ def main():
             cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'><span class='badge {cls}'>{signal}</span><div style='margin-top:2px'><span style='font-size:0.7rem;color:{s_color}'>Score {score}</span></div></div></div></div>"
             
         if cards: sector_html_blocks += f"<h3 class='sector-title'>{sector}</h3><div class='grid'>{cards}</div>"
-
 
     # 修正 Screener 排序
     # 因為 screener_rows_list 可能有重複 (如果股票同時在 TEMP 和 SECTORS)，去重
@@ -694,7 +489,6 @@ def main():
         score_cls = "g" if res['score'] >= 85 else ""
         vol_fire = "🔥" if res['rvol'] > 1.5 else ""
         screener_html += f"<tr><td>{res['ticker']}</td><td>${res['price']:.2f}</td><td class='{score_cls}'><b>{res['score']}</b> {vol_fire}</td><td><span class='badge {res['cls']}'>{res['signal']}</span></td></tr>"
-
 
     json_data = json.dumps(APP_DATA)
     final_html = f"""
@@ -741,7 +535,6 @@ def main():
             </div>
         </div>
 
-
         <div class="tabs">
             <div class="tab active" onclick="setTab('overview', this)">📊 市場概況</div>
             <div class="tab" onclick="setTab('screener', this)">🔍 強勢篩選 (LONG)</div>
@@ -754,17 +547,18 @@ def main():
         
         <div class="time">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
 
-
         <div id="modal" class="modal" onclick="document.getElementById('modal').style.display='none'">
             <div class="m-content" onclick="event.stopPropagation()">
-                <h2 id="m-ticker" style="margin-top:0"></h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h2 id="m-ticker" style="margin:0; font-size:2rem;"></h2>
+                    <button id="copy-btn" onclick="copyTicker()" style="background:#334155; border:1px solid #555; color:white; padding:5px 10px; border-radius:5px; cursor:pointer;">Copy Ticker</button>
+                </div>
                 <div id="m-deploy"></div>
                 <div><b>Daily SMC</b><div id="chart-d"></div></div>
                 <div><b>Hourly Entry</b><div id="chart-h"></div></div>
                 <button class="close-btn" onclick="document.getElementById('modal').style.display='none'">Close</button>
             </div>
         </div>
-
 
         <script>
         const STOCK_DATA = {json_data};
@@ -783,6 +577,14 @@ def main():
             document.getElementById('chart-d').innerHTML = '<img src="'+data.img_d+'">';
             document.getElementById('chart-h').innerHTML = '<img src="'+data.img_h+'">';
         }}
+        function copyTicker() {{
+            const ticker = document.getElementById('m-ticker').innerText;
+            navigator.clipboard.writeText(ticker).then(() => {{
+                const btn = document.getElementById('copy-btn');
+                btn.innerText = 'Copied!';
+                setTimeout(() => btn.innerText = 'Copy Ticker', 2000);
+            }});
+        }}
         </script>
     </body></html>
     """
@@ -790,7 +592,6 @@ def main():
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(final_html)
     print("✅ index.html generated!")
-
 
 if __name__ == "__main__":
     main()
