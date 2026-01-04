@@ -357,4 +357,285 @@ def process_ticker(t, app_data_dict, market_bonus):
                     <span>🏆 評分: <b style='color:{score_color};font-size:1.1em'>{score}</b></span>
                     <span>💰 RR: <b style='color:#10b981'>{rr:.1f}R</b></span>
                 </div>
-                <div style='font-size:0.8rem; color:#94a3b8; margin-bottom:5px;'>📈 近30日績效: {perf_30d
+                <div style='font-size:0.8rem; color:#94a3b8; margin-bottom:5px;'>📈 近30日績效: {perf_30d:+.1f}%</div>
+                {elite_html}
+                <ul class='deploy-list' style='margin-top:10px'>
+                    <li>TP: ${tp:.2f}</li><li>Entry: ${entry:.2f}</li><li>SL: ${sl:.2f}</li>
+                </ul>
+            </div>"""
+        else:
+            reason = "無FVG/Sweep" if (not found_fvg and not found_sweep) else ("逆勢" if not is_bullish else "溢價區")
+            ai_html = f"<div class='deploy-box wait'><div class='deploy-title'>⏳ WAIT</div><div>評分: <b style='color:#94a3b8'>{score}</b></div><ul class='deploy-list'><li>狀態: {reason}</li><li>參考入場: ${entry:.2f}</li></ul></div>"
+            
+        app_data_dict[t] = {"signal": signal, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score}
+        return {"ticker": t, "price": curr, "signal": signal, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
+    except Exception as e:
+        print(f"Err {t}: {e}")
+        return None
+
+# --- 10. 主程式 ---
+def main():
+    print("🚀 Starting Analysis (with Temporary Watchlist Filter)...")
+    weekly_news_html = get_polygon_news()
+    
+    market_status, market_text, market_bonus = get_market_condition()
+    market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
+    
+    APP_DATA, sector_html_blocks, screener_rows_list = {}, "", []
+
+    # ==========================================
+    # 🔥 1. 先處理暫時清單 (過濾機制)
+    # ==========================================
+    if TEMP_WATCHLIST:
+        print(f"🔎 Scanning {len(TEMP_WATCHLIST)} temp stocks for setups...")
+        valid_temp_stocks = []
+        
+        for t in TEMP_WATCHLIST:
+            # 先跑跑看
+            res = process_ticker(t, APP_DATA, market_bonus)
+            
+            if res:
+                # 🛑 過濾邏輯：如果是 WAIT，就把它殺掉，節省空間
+                if res['signal'] == "WAIT":
+                    # 從 APP_DATA 移除 (因為 process_ticker 會自動加進去)
+                    if t in APP_DATA:
+                        del APP_DATA[t]
+                    print(f"   🗑️ {t} is WAIT -> Removed.")
+                else:
+                    # ✅ 如果是 LONG，保留下來
+                    valid_temp_stocks.append(t)
+                    screener_rows_list.append(res) # 加入篩選器表格
+                    print(f"   ✨ {t} is LONG! Kept.")
+        
+        # 如果有合格的股票，把它們加入到 SECTORS 讓後面顯示
+        if valid_temp_stocks:
+            SECTORS["👀 每日快篩 (LONG Only)"] = valid_temp_stocks
+    
+    # ==========================================
+    # 🔥 2. 處理原本的固定板塊
+    # ==========================================
+    for sector, tickers in SECTORS.items():
+        # 如果是剛剛已經跑過的快篩區，就只產生 HTML，不重新跑 process_ticker
+        if sector == "👀 每日快篩 (LONG Only)":
+            # 這些股票已經在 APP_DATA 裡了，直接產生卡片
+            pass 
+        else:
+            # 原本的固定名單，全部都跑 (不管 wait 或 long)
+            valid_tickers_for_loop = tickers
+        
+        cards = ""
+        sector_results = []
+        
+        # 對這個板塊的每一隻股票
+        for t in tickers:
+            # 檢查是否已經有資料 (可能是快篩跑過的)
+            if t in APP_DATA:
+                # 直接拿資料
+                res = {
+                    "ticker": t,
+                    "price": float(APP_DATA[t]["deploy"].split("Entry: $")[1].split("<")[0]) if "Entry" in APP_DATA[t]["deploy"] else 0, # 簡化抓取
+                    "signal": APP_DATA[t]["signal"],
+                    "cls": "b-long" if APP_DATA[t]["signal"]=="LONG" else "b-wait",
+                    "score": APP_DATA[t]["score"],
+                    "rvol": 0, # 簡化
+                    "perf": 0
+                }
+                pass
+            else:
+                # 沒資料才跑
+                res = process_ticker(t, APP_DATA, market_bonus)
+                if res and res['signal'] == "LONG":
+                      screener_rows_list.append(res)
+            
+            # 從 APP_DATA 讀取最終顯示資訊 (確保資料一致)
+            if t in APP_DATA:
+                data = APP_DATA[t]
+                # 這裡重新建構 res 物件給排序用
+                score = data['score']
+                res_obj = {'ticker': t, 'score': score}
+                sector_results.append(res_obj)
+
+        # 排序並產生 HTML
+        sector_results.sort(key=lambda x: x['score'], reverse=True)
+        
+        for item in sector_results:
+            t = item['ticker']
+            if t not in APP_DATA: continue
+            
+            data = APP_DATA[t]
+            signal = data['signal']
+            score = data['score']
+            
+            cls = "b-long" if signal == "LONG" else "b-wait"
+            s_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
+            
+            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'><span class='badge {cls}'>{signal}</span><div style='margin-top:2px'><span style='font-size:0.7rem;color:{s_color}'>Score {score}</span></div></div></div></div>"
+            
+        if cards: sector_html_blocks += f"<h3 class='sector-title'>{sector}</h3><div class='grid'>{cards}</div>"
+
+    # 修正 Screener 排序
+    # 因為 screener_rows_list 可能有重複 (如果股票同時在 TEMP 和 SECTORS)，去重
+    seen = set()
+    unique_screener = []
+    for r in screener_rows_list:
+        if r['ticker'] not in seen:
+            unique_screener.append(r)
+            seen.add(r['ticker'])
+            
+    unique_screener.sort(key=lambda x: x['score'], reverse=True)
+    screener_html = ""
+    for res in unique_screener:
+        score_cls = "g" if res['score'] >= 85 else ""
+        vol_fire = "🔥" if res['rvol'] > 1.5 else ""
+        screener_html += f"<tr><td>{res['ticker']}</td><td>${res['price']:.2f}</td><td class='{score_cls}'><b>{res['score']}</b> {vol_fire}</td><td><span class='badge {res['cls']}'>{res['signal']}</span></td></tr>"
+
+    json_data = json.dumps(APP_DATA)
+    final_html = f"""
+    <!DOCTYPE html>
+    <html lang="zh-Hant">
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png" type="image/png">
+    
+    <title>DailyDip Pro</title>
+    <style>
+    :root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }}
+    body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }}
+    .tabs {{ display:flex; gap:10px; padding-bottom:10px; margin-bottom:15px; border-bottom:1px solid #333; overflow-x:auto; }}
+    .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; font-size:0.9rem; white-space:nowrap; }}
+    .tab.active {{ background:var(--acc); color:white; }}
+    .content {{ display:none; }} .content.active {{ display:block; }}
+    .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; padding-bottom: 20px; }}
+    .card {{ 
+        background: rgba(30, 41, 59, 0.7); 
+        backdrop-filter: blur(10px); 
+        border: 1px solid rgba(255, 255, 255, 0.1); 
+        border-radius: 12px; 
+        padding: 12px; 
+        cursor: pointer; 
+        transition: transform 0.2s, box-shadow 0.2s; 
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }}
+    .card:hover {{
+        transform: translateY(-3px); 
+        box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+        border-color: var(--acc);
+    }}
+    .head {{ display:flex; justify-content:space-between; margin-bottom:5px; }}
+    .code {{ font-weight:900; }} .price {{ color:#94a3b8; font-family:monospace; }}
+    .badge {{ padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; letter-spacing: 0.5px; font-weight:bold; }}
+    .b-long {{ background:rgba(16,185,129,0.2); color:var(--g); border:1px solid var(--g); }}
+    .b-wait {{ background:rgba(148,163,184,0.1); color:#94a3b8; border:1px solid #555; }}
+    table {{ width:100%; border-collapse:collapse; font-size:0.85rem; }}
+    th, td {{ padding:8px; text-align:left; border-bottom:1px solid #333; }}
+    .g {{ color:var(--g); font-weight:bold; }}
+    .news-item {{ background:var(--card); border:1px solid #333; border-radius:8px; padding:15px; margin-bottom:10px; }}
+    .news-title {{ color:var(--text); text-decoration:none; font-weight:bold; display:block; }}
+    .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99; justify-content:center; align-items:start; overflow-y:auto; padding:10px; }}
+    .m-content {{ background:var(--card); width:100%; max-width:600px; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #555; }}
+    .m-content img {{ width:100%; border-radius:6px; margin-bottom:10px; }}
+    .deploy-box {{ padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid; }}
+    .deploy-box.long {{ background:rgba(16,185,129,0.1); border-color:var(--g); }}
+    .deploy-box.wait {{ background:rgba(251,191,36,0.1); border-color:var(--y); }}
+    .close-btn {{ width:100%; padding:12px; background:var(--acc); border:none; color:white; border-radius:6px; font-weight:bold; margin-top:10px; cursor:pointer; }}
+    .time {{ text-align:center; color:#666; font-size:0.7rem; margin-top:30px; }}
+    .market-bar {{ background: #1e293b; padding: 10px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; display: flex; align-items: center; gap: 10px; }}
+    </style>
+    </head>
+    <body>
+        <div class="market-bar" style="border-left: 4px solid {market_color}">
+            <div style="font-size:1.2rem;">{ "🟢" if market_status=="BULLISH" else ("🔴" if market_status=="BEARISH" else "🟡") }</div>
+            <div>
+                <div style="font-weight:bold; color:{market_color}">Market: {market_status}</div>
+                <div style="font-size:0.8rem; color:#94a3b8">{market_text}</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="setTab('overview', this)">📊 市場概況</div>
+            <div class="tab" onclick="setTab('screener', this)">🔍 強勢篩選 (LONG)</div>
+            <div class="tab" onclick="setTab('news', this)">📰 News</div>
+        </div>
+        
+        <div id="overview" class="content active">{sector_html_blocks if sector_html_blocks else '<div style="text-align:center;padding:50px">載入中...</div>'}</div>
+        <div id="screener" class="content"><table><thead><tr><th>Ticker</th><th>Price</th><th>Score</th><th>Signal</th></tr></thead><tbody>{screener_html}</tbody></table></div>
+        <div id="news" class="content">{weekly_news_html}</div>
+        
+        <div class="time">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
+
+        <div id="modal" class="modal" onclick="document.getElementById('modal').style.display='none'">
+            <div class="m-content" onclick="event.stopPropagation()">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h2 id="m-ticker" style="margin:0; font-size:2rem;"></h2>
+                    <div>
+                        <button id="copy-btn" onclick="copyTicker()" style="background:#334155; border:1px solid #555; color:white; padding:5px 10px; border-radius:5px; cursor:pointer;">Copy Ticker</button>
+                    </div>
+                </div>
+                <div id="m-deploy"></div>
+                <div><b>Daily SMC</b><div id="chart-d"></div></div>
+                <div><b>Hourly Entry</b><div id="chart-h"></div></div>
+                <button class="close-btn" onclick="document.getElementById('modal').style.display='none'">Close</button>
+            </div>
+        </div>
+
+        <script>
+        const STOCK_DATA = {json_data};
+        
+        function setTab(id, el) {{
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            el.classList.add('active');
+        }}
+
+        function openModal(ticker) {{
+            const data = STOCK_DATA[ticker];
+            if (!data) return;
+            document.getElementById('modal').style.display = 'flex';
+            const tickerEl = document.getElementById('m-ticker');
+            tickerEl.innerText = ticker;
+            
+            // --- 👇 新增：TradingView 按鈕 ---
+            // 檢查是否已經有這個按鈕，沒有才加，避免重複
+            let tvBtn = document.getElementById('tv-btn');
+            if (!tvBtn) {{
+                const btnContainer = tickerEl.parentNode.querySelector('div'); // 找到 Copy 按鈕的那個容器
+                const newBtn = document.createElement('button');
+                newBtn.id = 'tv-btn';
+                newBtn.innerText = '📈 Chart';
+                newBtn.style.cssText = 'margin-left:10px; background:#2962FF; border:none; color:white; padding:5px 12px; border-radius:5px; cursor:pointer; font-weight:bold;';
+                newBtn.onclick = function() {{
+                    const currentTicker = document.getElementById('m-ticker').innerText;
+                    window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
+                }};
+                if(btnContainer) btnContainer.appendChild(newBtn);
+            }}
+            // -------------------------------
+
+            document.getElementById('m-deploy').innerHTML = data.deploy;
+            document.getElementById('chart-d').innerHTML = '<img src="'+data.img_d+'">';
+            document.getElementById('chart-h').innerHTML = '<img src="'+data.img_h+'">';
+        }}
+
+        function copyTicker() {{
+            const ticker = document.getElementById('m-ticker').innerText;
+            navigator.clipboard.writeText(ticker).then(() => {{
+                const btn = document.getElementById('copy-btn');
+                btn.innerText = 'Copied!';
+                setTimeout(() => btn.innerText = 'Copy Ticker', 2000);
+            }});
+        }}
+        </script>
+    </body></html>
+    """
+    
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(final_html)
+    print("✅ index.html generated!")
+
+if __name__ == "__main__":
+    main()
+# --- END OF CODE ---
