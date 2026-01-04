@@ -18,62 +18,99 @@ from datetime import datetime, timedelta
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 
-# 🔥🔥🔥【自動掃描池】GitHub 會自己掃描這些股票，找出符合條件的 🔥🔥🔥
-# 這裡我幫你放入了 Nasdaq 100 和熱門股，你可以隨時增加
-SCAN_UNIVERSE = [
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AMD", "NFLX", "INTC",
-    "QCOM", "TXN", "HON", "AMGN", "SBUX", "ADP", "GILD", "INTU", "ISRG", "MDLZ",
-    "BKNG", "VRTX", "REGN", "PYPL", "ADI", "KLAC", "LRCX", "PANW", "SNPS", "CDNS",
-    "CHTR", "MAR", "CSX", "ORLY", "ASML", "NXPI", "CTAS", "MNST", "ODFL", "PCAR",
-    "MELI", "ROST", "KDP", "PAYX", "MCHP", "IDXX", "AEP", "LULU", "EXC", "BKR",
-    "FAST", "EA", "CTSH", "VRSK", "XEL", "GEHC", "CSGP", "BIIB", "ON", "DXCM",
-    "ANSS", "TEAM", "GFS", "DLTR", "TTD", "WBD", "FANG", "ILMN", "ALGN", "WBA",
-    "ZM", "ZS", "CRWD", "DDOG", "NET", "PLTR", "SOFI", "COIN", "MARA", "MSTR",
-    "SMCI", "ARM", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "AFRM",
-    "UPST", "AI", "IONQ", "PLUG", "LCID", "RIVN", "NIO", "XPEV", "LI", "BABA"
-]
+# --- 1. 自動化選股核心 (Screener) ---
 
-SECTORS = {
-    "🔥 熱門交易": ["NVDA", "TSLA", "AAPL", "AMD", "PLTR", "SOFI", "MARA", "MSTR", "SMCI", "COIN"],
-    "💎 科技巨頭": ["MSFT", "AMZN", "GOOGL", "META", "NFLX", "CRM", "ADBE"],
-    "⚡ 半導體": ["TSM", "AVGO", "MU", "INTC", "ARM", "QCOM", "TXN", "AMAT"],
-    "🚀 成長股": ["HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "NET"],
-    "🏦 金融與消費": ["JPM", "V", "COST", "MCD", "NKE", "LLY", "WMT", "DIS", "SBUX"],
-    "📉 指數 ETF": ["SPY", "QQQ", "IWM", "TQQQ", "SQQQ"]
-}
+def get_sp500_tickers():
+    """從 Wikipedia 抓取 S&P 500 成分股"""
+    try:
+        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        tables = pd.read_html(url)
+        df = tables[0]
+        tickers = df['Symbol'].tolist()
+        # 修正一些格式 (例如 BRK.B -> BRK-B)
+        tickers = [t.replace('.', '-') for t in tickers]
+        print(f"📋 已抓取 S&P 500 名單，共 {len(tickers)} 隻。")
+        return tickers
+    except Exception as e:
+        print(f"❌ 無法抓取 S&P 500 名單: {e}")
+        # 備用名單 (萬一爬蟲失敗)
+        return ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD", "NFLX", "INTC"]
 
-# --- 1. 自動篩選邏輯 (移植自你的 Colab) ---
-def auto_scan_market():
-    print(f"🚀 啟動自動掃描... 目標: {len(SCAN_UNIVERSE)} 隻股票")
+def calculate_beta(stock_returns, market_returns):
+    """手動計算 Beta (速度快，不依賴 API info)"""
+    if len(stock_returns) != len(market_returns):
+        min_len = min(len(stock_returns), len(market_returns))
+        stock_returns = stock_returns[-min_len:]
+        market_returns = market_returns[-min_len:]
+    
+    covariance = np.cov(stock_returns, market_returns)[0][1]
+    variance = np.var(market_returns)
+    if variance == 0: return 0
+    return covariance / variance
+
+def auto_select_candidates():
+    print("🚀 啟動超級篩選器 (Criteria: Cap>3B, Price>SMA200, Vol>900M, Beta>=1)...")
+    
+    # 1. 獲取候選池 (S&P 500)
+    raw_tickers = get_sp500_tickers()
+    
+    # 為了節省時間，我們加上一些熱門成長股 (不在 S&P 500 裡的)
+    growth_adds = ["PLTR", "SOFI", "COIN", "MARA", "MSTR", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "ARM", "SMCI"]
+    full_list = list(set(raw_tickers + growth_adds))
+    
     valid_tickers = []
     
-    for ticker in SCAN_UNIVERSE:
+    # 2. 抓取大盤數據 (用於計算 Beta 和 市場趨勢)
+    spy = yf.Ticker("SPY").history(period="1y")
+    spy_returns = spy['Close'].pct_change().dropna()
+    
+    # 3. 開始過濾
+    # 由於 GitHub Actions 有時間限制，我們分批處理或限制數量
+    # 但為了精準，我們快速掃描。為了加速，我們只抓必要的歷史數據。
+    
+    print(f"🔍 開始掃描 {len(full_list)} 隻股票...")
+    
+    for ticker in full_list:
         try:
-            # 簡單抓取數據，不用太長，速度第一
-            df = yf.Ticker(ticker).history(period="3mo", interval="1d")
-            if df is None or len(df) < 50: continue
+            # 取得歷史數據 (只抓 1 年，足夠算 200MA 和 Beta)
+            df = yf.Ticker(ticker).history(period="1y")
+            if df is None or len(df) < 200: continue
             
-            # 1. 取得關鍵數據
+            # --- 條件 A: 股價在 SMA 200 以上 ---
             close = df['Close'].iloc[-1]
-            sma50 = df['Close'].rolling(50).mean().iloc[-1]
+            sma200 = df['Close'].rolling(200).mean().iloc[-1]
+            if close < sma200: continue # 淘汰
             
-            # 2. 強勢過濾：股價必須在 50MA 之上 (多頭趨勢)
-            if close < sma50: continue
+            # --- 條件 B: 30天平均成交額 > 900M USD ---
+            # 這是非常高的門檻，如果不夠多股票入選，建議調低到 300M
+            avg_vol_30 = df['Volume'].tail(30).mean()
+            avg_price_30 = df['Close'].tail(30).mean()
+            dollar_volume = avg_vol_30 * avg_price_30
+            
+            if dollar_volume < 900_000_000: continue # 淘汰 (9億美金)
+            
+            # --- 條件 C: Beta >= 1 ---
+            stock_returns = df['Close'].pct_change().dropna()
+            beta = calculate_beta(stock_returns, spy_returns)
+            if beta < 1.0: continue # 淘汰
+            
+            # --- 條件 D: 市值 > 3B ---
+            # yfinance 的 fast_info 比較快
+            try:
+                # 稍微延遲一下避免被鎖
+                market_cap = yf.Ticker(ticker).fast_info.market_cap
+                if market_cap < 3_000_000_000: continue # 淘汰
+            except:
+                # 如果抓不到市值，但前面條件都過了，通常是大股票，暫時保留
+                pass
 
-            # 3. 爆量計算 (RVOL)
-            vol_ma = df['Volume'].rolling(20).mean().iloc[-1]
-            curr_vol = df['Volume'].iloc[-1]
-            rvol = curr_vol / vol_ma if vol_ma > 0 else 0
+            print(f"   ✅ {ticker} 入選! (Beta: {beta:.2f}, $Vol: {dollar_volume/1e6:.0f}M)")
+            valid_tickers.append(ticker)
             
-            # 4. 條件：只要是多頭趨勢且有量 (RVOL > 1.0) 就列入觀察
-            # 或者你可以放寬條件，只要是多頭就列入
-            if rvol > 0.8: 
-                print(f"   ✨ {ticker} 符合條件 (RVOL: {rvol:.2f})")
-                valid_tickers.append(ticker)
-        except:
+        except Exception as e:
             continue
             
-    print(f"✅ 掃描完成，共找到 {len(valid_tickers)} 隻潛力股")
+    print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻符合條件的強勢股。")
     return valid_tickers
 
 # --- 2. 新聞 ---
@@ -320,8 +357,7 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
 # --- 9. 單一股票處理 ---
 def process_ticker(t, app_data_dict, market_bonus):
     try:
-        # 如果不是自動掃描的，加一點延遲避免 API 限制
-        time.sleep(0.1)
+        # 自動選股已經過濾過了，這裡直接畫圖即可，不用再嚴格檢查
         df_d = fetch_data_safe(t, "1y", "1d")
         if df_d is None or len(df_d) < 50: return None
         df_h = fetch_data_safe(t, "1mo", "1h")
@@ -401,7 +437,7 @@ def process_ticker(t, app_data_dict, market_bonus):
 
 # --- 10. 主程式 ---
 def main():
-    print("🚀 Starting Fully Automated Analysis...")
+    print("🚀 Starting Fully Automated Analysis (Advanced Filter)...")
     weekly_news_html = get_polygon_news()
     
     market_status, market_text, market_bonus = get_market_condition()
@@ -410,40 +446,36 @@ def main():
     APP_DATA, sector_html_blocks, screener_rows_list = {}, "", []
 
     # ==========================================
-    # 🔥 1. 執行自動掃描 (取代手動清單)
+    # 🔥 1. 執行自動掃描 (符合 4 大條件)
     # ==========================================
-    auto_picked_tickers = auto_scan_market()
+    # 這裡的邏輯是：先海選出符合基本面和技術面(200MA, Beta)的股票
+    auto_picked_tickers = auto_select_candidates()
     
-    # 這裡將掃描到的股票設為 "每日快篩" 清單
-    if auto_picked_tickers:
-        SECTORS["👀 自動快篩 (AI Scanned)"] = auto_picked_tickers
-        print(f"✅ 自動快篩區已建立: 包含 {len(auto_picked_tickers)} 隻股票")
+    # 建立一個動態的板塊
+    SECTORS_DYNAMIC = {
+        "🔥 超級強勢股 (Filtered)": auto_picked_tickers
+    }
 
     # ==========================================
-    # 🔥 2. 處理所有板塊 (包含自動快篩)
+    # 🔥 2. 處理板塊
     # ==========================================
-    for sector, tickers in SECTORS.items():
+    for sector, tickers in SECTORS_DYNAMIC.items():
+        if not tickers: continue
+        
         cards = ""
         sector_results = []
         
         for t in tickers:
-            # 檢查是否已經有資料 (避免重複跑)
             if t in APP_DATA:
-                # 簡單提取資料
                 data = APP_DATA[t]
-                res_obj = {'ticker': t, 'score': data['score']}
-                sector_results.append(res_obj)
+                sector_results.append({'ticker': t, 'score': data['score']})
             else:
-                # 沒資料才跑
                 res = process_ticker(t, APP_DATA, market_bonus)
                 if res:
-                    # 如果是 LONG 訊號，加入到篩選列表
                     if res['signal'] == "LONG":
                         screener_rows_list.append(res)
-                    # 加入到板塊結果
                     sector_results.append({'ticker': t, 'score': res['score']})
         
-        # 排序
         sector_results.sort(key=lambda x: x['score'], reverse=True)
         
         for item in sector_results:
@@ -453,7 +485,6 @@ def main():
             data = APP_DATA[t]
             signal = data['signal']
             score = data['score']
-            
             cls = "b-long" if signal == "LONG" else "b-wait"
             s_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
             
@@ -461,7 +492,6 @@ def main():
             
         if cards: sector_html_blocks += f"<h3 class='sector-title'>{sector}</h3><div class='grid'>{cards}</div>"
 
-    # 去重篩選器列表
     seen = set()
     unique_screener = []
     for r in screener_rows_list:
@@ -483,9 +513,7 @@ def main():
     <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png" type="image/png">
-    
     <title>DailyDip Pro</title>
     <style>
     :root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }}
@@ -585,10 +613,9 @@ def main():
             const tickerEl = document.getElementById('m-ticker');
             tickerEl.innerText = ticker;
             
-            // 讓 TradingView 按鈕每次打開都重新生成，避免重複
             let btnContainer = tickerEl.parentNode.querySelector('div');
             let oldTvBtn = document.getElementById('tv-btn');
-            if (oldTvBtn) oldTvBtn.remove(); // 刪除舊的
+            if (oldTvBtn) oldTvBtn.remove();
 
             const newBtn = document.createElement('button');
             newBtn.id = 'tv-btn';
