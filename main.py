@@ -324,4 +324,234 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
         for i in range(2, len(plot_df)):
             idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
-                bot, top = plot_df['High'].iloc[i-2],
+                bot, top = plot_df['High'].iloc[i-2], plot_df['Low'].iloc[i]
+                if (top - bot) > (plot_df['Close'].mean() * 0.002):
+                    rect = patches.Rectangle((idx-0.4, bot), 10, top - bot, linewidth=0, facecolor='#10b981', alpha=0.15)
+                    ax.add_patch(rect)
+            elif plot_df['High'].iloc[i] < plot_df['Low'].iloc[i-2]:
+                bot, top = plot_df['High'].iloc[i], plot_df['Low'].iloc[i-2]
+                if (top - bot) > (plot_df['Close'].mean() * 0.002):
+                    rect = patches.Rectangle((idx-0.4, bot), 10, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.15)
+                    ax.add_patch(rect)
+
+        # 標記 Sweep
+        if found_sweep:
+            lowest = plot_df['Low'].min()
+            ax.annotate("🔥 SWEEP", xy=(x_max-3, lowest), xytext=(x_max-3, lowest*0.98),
+                        arrowprops=dict(facecolor='#fbbf24', shrink=0.05),
+                        color='#fbbf24', fontsize=9, fontweight='bold', ha='center')
+
+        # 入場線
+        line_style = ':' if is_wait else '-'
+        ax.axhline(tp, color='#10b981', linestyle=line_style, linewidth=1, alpha=0.7)
+        ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1, alpha=0.9)
+        ax.axhline(sl, color='#ef4444', linestyle=line_style, linewidth=1, alpha=0.7)
+        
+        ax.text(x_min, tp, " TP", color='#10b981', fontsize=8, va='bottom', fontweight='bold')
+        ax.text(x_min, entry, " ENTRY", color='#3b82f6', fontsize=8, va='bottom', fontweight='bold')
+        ax.text(x_min, sl, " SL", color='#ef4444', fontsize=8, va='top', fontweight='bold')
+
+        if not is_wait:
+            ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#10b981', alpha=0.05))
+            ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.05))
+
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=90)
+        plt.close(fig)
+        buf.seek(0)
+        return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+    except Exception as e: 
+        print(f"Plot Error: {e}")
+        return create_error_image("Plot Error")
+
+# --- 9. 單一股票處理 ---
+def process_ticker(t, app_data_dict, market_bonus):
+    try:
+        df_d = fetch_data_safe(t, "1y", "1d")
+        if df_d is None or len(df_d) < 50: return None
+        df_h = fetch_data_safe(t, "1mo", "1h")
+        if df_h is None or df_h.empty: df_h = df_d
+
+        curr = float(df_d['Close'].iloc[-1])
+        sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
+        if pd.isna(sma200): sma200 = curr
+
+        bsl, ssl, eq, entry, sl, found_fvg, found_sweep = calculate_smc(df_d)
+        tp = bsl
+
+        is_bullish = curr > sma200
+        in_discount = curr < eq
+        signal = "LONG" if (is_bullish and in_discount and (found_fvg or found_sweep)) else "WAIT"
+        
+        indicators = calculate_indicators(df_d)
+        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, found_sweep, indicators)
+        
+        is_wait = (signal == "WAIT")
+        img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, found_sweep)
+        img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, found_sweep)
+
+        cls = "b-long" if signal == "LONG" else "b-wait"
+        score_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
+        
+        elite_html = ""
+        if score >= 85 or found_sweep or rvol > 1.5:
+            reasons_html = "".join([f"<li>✅ {r}</li>" for r in reasons])
+            confluence_text = f"🔥 <b>策略共振：</b> {strategies} 訊號" if strategies >= 2 else ""
+            
+            sweep_text = ""
+            if found_sweep:
+                sweep_text = "<div style='margin-top:8px;padding:8px;background:rgba(251,191,36,0.1);border-left:3px solid #fbbf24;color:#fcd34d;font-size:0.85rem;'><b>⚠️ 獵殺訊號 (Sweep)</b></div>"
+            
+            elite_html = f"""
+            <div style='background:rgba(16,185,129,0.1);border:1px solid #10b981;padding:12px;border-radius:8px;margin:10px 0;'>
+                <div style='font-weight:bold;color:#10b981;'>💎 AI 分析 (Score {score})</div>
+                <div style='font-size:0.85rem;color:#e2e8f0;'>{confluence_text}</div>
+                <ul style='margin:0;padding-left:20px;font-size:0.8rem;color:#d1d5db;'>{reasons_html}</ul>
+                {sweep_text}
+            </div>
+            """
+        
+        if signal == "LONG":
+            ai_html = f"""
+            <div class='deploy-box long'>
+                <div class='deploy-title'>✅ LONG SETUP</div>
+                
+                <div style='display:flex;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:10px;'>
+                    <div style='text-align:center'>
+                        <div style='font-size:0.75rem;color:#94a3b8'>Current</div>
+                        <div style='font-size:1.1rem;font-weight:bold;color:#f8fafc'>${curr:.2f}</div>
+                    </div>
+                    <div style='text-align:center'>
+                        <div style='font-size:0.75rem;color:#94a3b8'>Target (TP)</div>
+                        <div style='font-size:1.1rem;font-weight:bold;color:#10b981'>${tp:.2f}</div>
+                    </div>
+                    <div style='text-align:center'>
+                        <div style='font-size:0.75rem;color:#94a3b8'>R:R</div>
+                        <div style='font-size:1.1rem;font-weight:bold;color:#fbbf24'>{rr:.1f}R</div>
+                    </div>
+                </div>
+                {elite_html}
+                <ul class='deploy-list'>
+                    <li>Entry: ${entry:.2f}</li>
+                    <li>SL: ${sl:.2f}</li>
+                </ul>
+            </div>"""
+        else:
+            reason = "無FVG/Sweep" if (not found_fvg and not found_sweep) else ("逆勢" if not is_bullish else "溢價區")
+            ai_html = f"<div class='deploy-box wait'><div class='deploy-title'>⏳ WAIT</div><div>狀態: {reason}</div></div>"
+            
+        app_data_dict[t] = {"signal": signal, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol}
+        return {"ticker": t, "price": curr, "signal": signal, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
+    except Exception as e:
+        print(f"Err {t}: {e}")
+        return None
+
+# --- 10. 主程式 ---
+def main():
+    print("🚀 啟動超級篩選器 (Beta > 1, $Vol > 900M)...")
+    weekly_news_html = get_polygon_news()
+    market_status, market_text, market_bonus = get_market_condition()
+    market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
+    
+    APP_DATA, sector_html_blocks, screener_rows_list = {}, "", []
+
+    auto_picked_tickers = auto_select_candidates()
+    SECTORS_DYNAMIC = {
+        "🔥 超級強勢股 (Filtered)": auto_picked_tickers
+    }
+
+    for sector, tickers in SECTORS_DYNAMIC.items():
+        if not tickers: 
+            sector_html_blocks += f"<h3 class='sector-title'>{sector}</h3><div style='padding:20px'>今天沒有符合嚴格條件的股票 🤷‍♂️</div>"
+            continue
+            
+        cards = ""
+        sector_results = []
+        for t in tickers:
+            if t in APP_DATA:
+                data = APP_DATA[t]
+                sector_results.append({'ticker': t, 'score': data['score'], 'rvol': data.get('rvol', 0)})
+            else:
+                res = process_ticker(t, APP_DATA, market_bonus)
+                if res:
+                    if res['signal'] == "LONG": screener_rows_list.append(res)
+                    sector_results.append({'ticker': t, 'score': res['score'], 'rvol': res['rvol']})
+        
+        sector_results.sort(key=lambda x: x['score'], reverse=True)
+        for item in sector_results:
+            t = item['ticker']
+            if t not in APP_DATA: continue
+            data = APP_DATA[t]
+            
+            # --- 顯示成交量邏輯 ---
+            rvol_val = item['rvol']
+            rvol_str = f"Vol {rvol_val:.1f}x"
+            rvol_html = f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
+            
+            if rvol_val > 1.5:
+                rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>"
+            elif rvol_val > 1.2:
+                rvol_html = f"<span style='color:#fbbf24;font-size:0.8rem'>{rvol_str} ⚡</span>"
+
+            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'><span class='badge {('b-long' if data['signal']=='LONG' else 'b-wait')}'>{data['signal']}</span></div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span style='font-size:0.8rem;color:{('#10b981' if item['score']>=85 else '#3b82f6')}'>Score {item['score']}</span>{rvol_html}</div></div>"
+            
+        if cards: sector_html_blocks += f"<h3 class='sector-title'>{sector}</h3><div class='grid'>{cards}</div>"
+
+    seen = set()
+    unique_screener = []
+    for r in screener_rows_list:
+        if r['ticker'] not in seen:
+            unique_screener.append(r)
+            seen.add(r['ticker'])
+            
+    unique_screener.sort(key=lambda x: x['score'], reverse=True)
+    screener_html = ""
+    for res in unique_screener:
+        score_cls = "g" if res['score'] >= 85 else ""
+        vol_fire = "🔥" if res['rvol'] > 1.5 else ""
+        screener_html += f"<tr><td>{res['ticker']}</td><td>${res['price']:.2f}</td><td class='{score_cls}'><b>{res['score']}</b> {vol_fire}</td><td><span class='badge {res['cls']}'>{res['signal']}</span></td></tr>"
+
+    json_data = json.dumps(APP_DATA)
+    final_html = f"""<!DOCTYPE html>
+    <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
+    <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99; justify-content:center; overflow-y:auto; padding:10px; }} .m-content {{ background:var(--card); width:100%; max-width:600px; padding:15px; margin-top:20px; border-radius:12px; }} .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }}</style></head>
+    <body>
+    <div class="market-bar" style="border-left:4px solid {market_color}"><div>{ "🟢" if market_status=="BULLISH" else "🔴" }</div><div><b>Market: {market_status}</b><div style="font-size:0.8rem;color:#94a3b8">{market_text}</div></div></div>
+    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 篩選結果</div><div class="tab" onclick="setTab('news',this)">📰 News</div></div>
+    <div id="overview" class="content active">{sector_html_blocks}</div>
+    <div id="news" class="content">{weekly_news_html}</div>
+    <div style="text-align:center;color:#666;margin-top:30px;font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
+    
+    <div id="modal" class="modal" onclick="this.style.display='none'">
+        <div class="m-content" onclick="event.stopPropagation()">
+            <div style="display:flex;justify-content:space-between;margin-bottom:15px;"><h2 id="m-ticker" style="margin:0"></h2><div id="btn-area"></div></div>
+            <div id="m-deploy"></div><div><b>Daily</b><div id="chart-d"></div></div><div><b>Hourly</b><div id="chart-h"></div></div>
+            <button onclick="document.getElementById('modal').style.display='none'" style="width:100%;padding:12px;background:var(--acc);border:none;color:white;border-radius:6px;margin-top:10px;">Close</button>
+        </div>
+    </div>
+
+    <script>
+    const DATA={json_data};
+    function setTab(id,el){{document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}}
+    function openModal(t){{
+        const d=DATA[t];if(!d)return;
+        document.getElementById('modal').style.display='flex';
+        document.getElementById('m-ticker').innerText=t;
+        document.getElementById('m-deploy').innerHTML=d.deploy;
+        document.getElementById('chart-d').innerHTML='<img src="'+d.img_d+'" style="width:100%;border-radius:6px">';
+        document.getElementById('chart-h').innerHTML='<img src="'+d.img_h+'" style="width:100%;border-radius:6px">';
+        
+        const btnArea=document.getElementById('btn-area'); btnArea.innerHTML='';
+        const tvBtn=document.createElement('button'); tvBtn.innerText='📈 Chart';
+        tvBtn.style.cssText='background:#2962FF;border:none;color:white;padding:5px 12px;border-radius:5px;font-weight:bold;cursor:pointer';
+        tvBtn.onclick=()=>window.open('https://www.tradingview.com/chart/?symbol='+t,'_blank');
+        btnArea.appendChild(tvBtn);
+    }}
+    </script></body></html>"""
+    
+    with open("index.html", "w", encoding="utf-8") as f: f.write(final_html)
+    print("✅ index.html generated!")
+
+if __name__ == "__main__":
+    main()
+# --- END OF CODE ---
