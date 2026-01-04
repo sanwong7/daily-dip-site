@@ -568,14 +568,33 @@ def main():
             document.getElementById(id).classList.add('active');
             el.classList.add('active');
         }}
-        function openModal(ticker) {{
+function openModal(ticker) {
             const data = STOCK_DATA[ticker];
             if (!data) return;
             document.getElementById('modal').style.display = 'flex';
             document.getElementById('m-ticker').innerText = ticker;
+            
+            // --- 👇 新增：TradingView 按鈕 ---
+            // 檢查是否已經有這個按鈕，沒有才加，避免重複
+            let tvBtn = document.getElementById('tv-btn');
+            if (!tvBtn) {
+                const btnContainer = document.getElementById('m-ticker').parentNode;
+                const newBtn = document.createElement('button');
+                newBtn.id = 'tv-btn';
+                newBtn.innerText = '📈 TradingView';
+                newBtn.style.cssText = 'margin-left:10px; background:#2962FF; border:none; color:white; padding:5px 12px; border-radius:5px; cursor:pointer; font-weight:bold;';
+                newBtn.onclick = function() {
+                    const currentTicker = document.getElementById('m-ticker').innerText;
+                    window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
+                };
+                btnContainer.appendChild(newBtn);
+            }
+            // -------------------------------
+
             document.getElementById('m-deploy').innerHTML = data.deploy;
             document.getElementById('chart-d').innerHTML = '<img src="'+data.img_d+'">';
             document.getElementById('chart-h').innerHTML = '<img src="'+data.img_h+'">';
+        }
         }}
         function copyTicker() {{
             const ticker = document.getElementById('m-ticker').innerText;
