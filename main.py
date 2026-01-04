@@ -1,15 +1,3 @@
-Scan
-🚀 Google Colab 每日掃描器 (Top 20 強勢爆量版)
-請依照以下步驟操作 (每天只需 3 分鐘)：
-1. 打開 Google Colab。
-2. 將您的 nasdaq_mid_large_caps (2).csv 拖入左側資料夾。
-3. 複製下方代碼，貼上並按播放。
-<!-- end list -->
-# @title 👑 每日 Top 20 強勢爆量股掃描器 (Daily Scanner)
-# 快速安裝套件
-!pip install yfinance pandas -q
-
-
 import yfinance as yf
 import pandas as pd
 import time
