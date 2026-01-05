@@ -14,7 +14,7 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET # 用來解析 RSS
+import xml.etree.ElementTree as ET
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
@@ -106,18 +106,23 @@ def auto_select_candidates():
     print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
     return valid_tickers
 
-# --- 2. 新聞 (修改為 Google News 中文版) ---
+# --- 2. 新聞 (修正版：改用 Yahoo 奇摩股市 RSS) ---
 def get_google_news_zh():
-    """抓取 Google News 財經版 (繁體中文) RSS"""
+    """抓取 Yahoo 奇摩股市 (繁體中文) RSS"""
     news_html = ""
     try:
-        # Google News 台灣財經版 RSS URL
-        url = "https://news.google.com/rss/topics/CAAqLSgwKhowIQAqIwohCAqJAgwTCO_J_wQqlgIKDwgLCNq41gMww9jqBaIB?hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        # Yahoo 奇摩股市 - 美股焦點 RSS
+        url = "https://tw.stock.yahoo.com/rss?category=us-market"
         
-        resp = requests.get(url, timeout=10)
+        # 偽裝成瀏覽器，避免被擋
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        
+        resp = requests.get(url, headers=headers, timeout=10)
+        # 修正編碼問題
+        resp.encoding = 'utf-8'
+        
         root = ET.fromstring(resp.content)
         
-        # 限制顯示 15 則新聞
         count = 0
         for item in root.findall('./channel/item'):
             if count >= 15: break
@@ -126,30 +131,21 @@ def get_google_news_zh():
             link = item.find('link').text
             pubDate = item.find('pubDate').text
             
-            # 簡單處理標題 (去掉後面的媒體名稱)
-            if "-" in title:
-                title_parts = title.rsplit("-", 1)
-                clean_title = title_parts[0].strip()
-                source = title_parts[1].strip()
-            else:
-                clean_title = title
-                source = "Google News"
-
             # 格式化日期
             try:
-                dt_obj = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %Z")
+                # Yahoo RSS 日期格式: Tue, 06 Jan 2026 05:30:00 +0800
+                dt_obj = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z")
                 date_str = dt_obj.strftime("%m/%d %H:%M")
             except:
                 date_str = pubDate[:16]
 
-            # 製作美觀的新聞卡片
             news_html += f"""
             <div class='news-card'>
                 <div class='news-meta'>
-                    <span class='news-source'>{source}</span>
+                    <span class='news-source'>Yahoo 財經</span>
                     <span class='news-date'>{date_str}</span>
                 </div>
-                <a href='{link}' target='_blank' class='news-title'>{clean_title}</a>
+                <a href='{link}' target='_blank' class='news-title'>{title}</a>
             </div>
             """
             count += 1
@@ -159,7 +155,13 @@ def get_google_news_zh():
             
     except Exception as e:
         print(f"News Error: {e}")
-        news_html = f"<div style='padding:20px'>無法載入新聞: {e}</div>"
+        # 如果 Yahoo 也掛了，顯示備用連結
+        news_html = f"""
+        <div style='padding:20px;text-align:center'>
+            無法載入新聞 ({e})<br>
+            <a href='https://news.cnyes.com/news/cat/us_stock' target='_blank' style='color:#3b82f6'>點此前往鉅亨網美股新聞</a>
+        </div>
+        """
         
     return news_html
 
@@ -403,9 +405,7 @@ def process_ticker(t, app_data_dict, market_bonus):
 # --- 10. 主程式 ---
 def main():
     print("🚀 啟動超級篩選器 (Beta > 1, $Vol > 500M)...")
-    # 🔥 這裡改成抓取中文新聞 🔥
     weekly_news_html = get_google_news_zh()
-    
     market_status, market_text, market_bonus = get_market_condition()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
     
@@ -465,7 +465,6 @@ def main():
     final_html = f"""<!DOCTYPE html>
     <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
     <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99; justify-content:center; overflow-y:auto; padding:10px; }} .m-content {{ background:var(--card); width:100%; max-width:600px; padding:15px; margin-top:20px; border-radius:12px; }} .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} 
-    /* 新增新聞卡片樣式 */
     .news-card {{ background:var(--card); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:10px; }}
     .news-title {{ font-size:1rem; font-weight:bold; color:var(--text); text-decoration:none; display:block; margin-top:5px; }}
     .news-meta {{ font-size:0.75rem; color:#94a3b8; display:flex; justify-content:space-between; }}
@@ -534,15 +533,11 @@ def main():
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             
             if (isMobile) {{
-                // 優先嘗試喚醒 App (Deep Link)
                 window.location.href = 'tradingview://chart?symbol=' + currentTicker;
-                
-                // 保險：1.5秒後如果還沒跳轉成功，就去開網頁版
                 setTimeout(() => {{
                     window.location.href = 'https://www.tradingview.com/chart/?symbol=' + currentTicker;
                 }}, 1500);
             }} else {{
-                // 電腦版維持開新分頁
                 window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
             }}
         }};
