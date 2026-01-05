@@ -440,19 +440,22 @@ def main():
         const btnArea=document.getElementById('btn-area'); btnArea.innerHTML='';
         const tvBtn=document.createElement('button'); tvBtn.innerText='📈 Chart';
         tvBtn.style.cssText='background:#2962FF;border:none;color:white;padding:5px 12px;border-radius:5px;font-weight:bold;cursor:pointer';
-        tvBtn.onclick=function(){{
+        
+        // --- 🚀 手機 App 跳轉修復邏輯 ---
+        tvBtn.onclick = function() {{
             const currentTicker = document.getElementById('m-ticker').innerText;
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             
             if (isMobile) {{
-                window.location.href = 'tradingview://chart?symbol=' + currentTicker;
-                setTimeout(() => {{
-                    window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
-                }}, 1000);
+                // 手機版：使用 location.href 同頁跳轉，這能更有效地觸發 iOS/Android 的 Deep Link 攔截
+                window.location.href = 'https://www.tradingview.com/chart/?symbol=' + currentTicker;
             }} else {{
+                // 電腦版：維持開新分頁
                 window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
             }}
         }};
+        // ----------------------------------
+        
         btnArea.appendChild(tvBtn);
     }}
     </script></body></html>"""
