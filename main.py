@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 
-# --- 1. 自動化選股核心 (超級篩選器) ---
+# --- 1. 自動化選股核心 ---
 
 def get_sp500_tickers():
     """從 Wikipedia 抓取 S&P 500 成分股"""
@@ -32,7 +32,6 @@ def get_sp500_tickers():
         return tickers
     except Exception as e:
         print(f"❌ 無法抓取 S&P 500 名單: {e}")
-        # 備用名單
         return ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD", "NFLX", "INTC"]
 
 def calculate_beta(stock_returns, market_returns):
@@ -53,13 +52,11 @@ def auto_select_candidates():
     print("🚀 啟動超級篩選器 (Criteria: Cap>3B, Price>SMA200, Vol>900M, Beta>=1)...")
     
     raw_tickers = get_sp500_tickers()
-    # 補上一些熱門成長股
     growth_adds = ["PLTR", "SOFI", "COIN", "MARA", "MSTR", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "ARM", "SMCI", "APP", "RDDT", "HIMS", "ASTS", "IONQ"]
     full_list = list(set(raw_tickers + growth_adds))
     
     valid_tickers = []
     
-    # 抓取大盤數據用於計算 Beta
     try:
         spy = yf.Ticker("SPY").history(period="1y")
         if spy.empty: return []
@@ -71,28 +68,23 @@ def auto_select_candidates():
     
     for ticker in full_list:
         try:
-            # 優化：先檢查市值 (速度快)
             try:
                 info = yf.Ticker(ticker).fast_info
                 if info.market_cap < 3_000_000_000: continue
             except: pass
 
-            # 抓 K 線
             df = yf.Ticker(ticker).history(period="1y")
             if df is None or len(df) < 200: continue
             
-            # A. 股價 > 200MA
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
             if close < sma200: continue 
             
-            # B. 30日成交額 > 900M
             avg_vol = df['Volume'].tail(30).mean()
             avg_price = df['Close'].tail(30).mean()
             dollar_vol = avg_vol * avg_price
             if dollar_vol < 900_000_000: continue 
             
-            # C. Beta >= 1
             stock_returns = df['Close'].pct_change().dropna()
             beta = calculate_beta(stock_returns, spy_returns)
             if beta < 1.0: continue
@@ -183,15 +175,26 @@ def calculate_indicators(df):
     
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
-# --- 6. 評分系統 ---
-def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_sweep, indicators):
+# --- 6. 評分系統 (修改：加入 Major/Minor Sweep 加分邏輯) ---
+def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators):
     try:
         score = 60 + market_bonus
         reasons = []
         rsi, rvol, golden_cross, trend, perf_30d = indicators
         
         strategies = 0
-        if found_sweep: strategies += 1
+        
+        # --- Sweep 評分邏輯修改 ---
+        if sweep_type == "MAJOR":
+            strategies += 1
+            score += 25 # 強力獵殺加重分
+            reasons.append("🌊 強力獵殺 (Major Sweep >20d)")
+        elif sweep_type == "MINOR":
+            strategies += 1
+            score += 15 # 短線獵殺加分
+            reasons.append("💧 短線獵殺 (Minor Sweep >10d)")
+        # ------------------------
+
         if golden_cross: strategies += 1
         if 40 <= rsi.iloc[-1] <= 55: strategies += 1
         
@@ -216,10 +219,6 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
             score += 10
             reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
         elif curr_rvol > 1.1: score += 5
-
-        if found_sweep:
-            score += 20
-            reasons.append("💧 觸發流動性獵殺 (Sweep)")
             
         if golden_cross:
             score += 10
@@ -241,7 +240,7 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, found_s
         return min(max(int(score), 0), 99), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
 
-# --- 7. SMC 運算 ---
+# --- 7. SMC 運算 (修改：區分 Major/Minor Sweep) ---
 def calculate_smc(df):
     try:
         window = 50
@@ -253,32 +252,49 @@ def calculate_smc(df):
         
         best_entry = eq
         found_fvg = False
-        found_sweep = False
+        sweep_type = None # None, "MINOR", "MAJOR"
         
         last_3 = recent.tail(3)
-        check_low = recent['Low'].iloc[:-3].tail(10).min()
+        
+        # 取得不包含最後 3 根 K 線的歷史數據，用來計算過去的低點
+        prior_data = recent.iloc[:-3]
+        
+        # 計算 10日低點 和 20日低點
+        low_10d = prior_data['Low'].tail(10).min()
+        low_20d = prior_data['Low'].tail(20).min()
         
         for i in range(len(last_3)):
             candle = last_3.iloc[i]
-            if candle['Low'] < check_low and candle['Close'] > check_low:
-                found_sweep = True
-                best_entry = check_low
-                break
+            
+            # 優先檢查是否跌破 20日低點 (Major)
+            if candle['Low'] < low_20d and candle['Close'] > low_20d:
+                sweep_type = "MAJOR"
+                best_entry = low_20d # 獵殺點即入場點
+                break # 找到最強訊號就停止
+            
+            # 再檢查是否跌破 10日低點 (Minor)
+            elif candle['Low'] < low_10d and candle['Close'] > low_10d:
+                # 只有還沒找到 Major 的時候才標記 Minor
+                if sweep_type != "MAJOR":
+                    sweep_type = "MINOR"
+                    best_entry = low_10d
         
+        # FVG 偵測
         for i in range(2, len(recent)):
             if recent['Low'].iloc[i] > recent['High'].iloc[i-2]:
                 fvg = float(recent['Low'].iloc[i])
                 if fvg < eq:
-                    if not found_sweep: best_entry = fvg
+                    # 如果沒有發生 Sweep，才把 FVG 當作最佳入場
+                    if not sweep_type: best_entry = fvg
                     found_fvg = True
                     break
                     
-        return bsl, ssl_long, eq, best_entry, ssl_long*0.99, found_fvg, found_sweep
+        return bsl, ssl_long, eq, best_entry, ssl_long*0.99, found_fvg, sweep_type
     except:
         last = float(df['Close'].iloc[-1])
-        return last*1.05, last*0.95, last, last, last*0.94, False, False
+        return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 8. 繪圖核心 (升級版：含成交量 + 均線) ---
+# --- 8. 繪圖核心 (修改：根據 Sweep 類型顯示不同標籤) ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#0f172a')
@@ -291,27 +307,24 @@ def create_error_image(msg):
     buf.seek(0)
     return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
 
-def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
+def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
     try:
         plt.close('all')
         if df is None or len(df) < 5: return create_error_image("No Data")
         
-        # 抓取數據並畫圖，這裡使用 tail(80) 讓均線有足夠數據顯示
         plot_df = df.tail(80).copy()
         
         entry = float(entry) if not np.isnan(entry) else plot_df['Close'].iloc[-1]
         sl = float(sl) if not np.isnan(sl) else plot_df['Low'].min()
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
 
-        # 設定外觀風格
         mc = mpf.make_marketcolors(up='#10b981', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#1f2937', 'down':'#1f2937'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#1e293b', facecolor='#0f172a')
         
-        # 繪圖 (啟用 volume=True, mav畫出均線)
         fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, 
             mav=(50, 200), 
             title=dict(title=f"{ticker} - {title}", color='white', size=12, weight='bold'),
-            figsize=(6, 4), # 放大圖片
+            figsize=(6, 4),
             panel_ratios=(7, 2), 
             scale_width_adjustment=dict(candle=1.2), 
             returnfig=True,
@@ -320,7 +333,6 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
         ax = axlist[0]
         x_min, x_max = ax.get_xlim()
         
-        # FVG
         for i in range(2, len(plot_df)):
             idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
@@ -334,14 +346,22 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, found_sweep):
                     rect = patches.Rectangle((idx-0.4, bot), 10, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.15)
                     ax.add_patch(rect)
 
-        # 標記 Sweep
-        if found_sweep:
+        # --- Sweep 標記邏輯 ---
+        if sweep_type:
             lowest = plot_df['Low'].min()
-            ax.annotate("🔥 SWEEP", xy=(x_max-3, lowest), xytext=(x_max-3, lowest*0.98),
-                        arrowprops=dict(facecolor='#fbbf24', shrink=0.05),
-                        color='#fbbf24', fontsize=9, fontweight='bold', ha='center')
+            
+            if sweep_type == "MAJOR":
+                label_text = "🌊 MAJOR SWEEP"
+                label_color = "#ef4444" # 紅色
+            else:
+                label_text = "💧 MINOR SWEEP"
+                label_color = "#fbbf24" # 黃色
 
-        # 入場線
+            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-3, lowest*0.98),
+                        arrowprops=dict(facecolor=label_color, shrink=0.05),
+                        color=label_color, fontsize=9, fontweight='bold', ha='center')
+        # --------------------
+
         line_style = ':' if is_wait else '-'
         ax.axhline(tp, color='#10b981', linestyle=line_style, linewidth=1, alpha=0.7)
         ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1, alpha=0.9)
@@ -376,31 +396,38 @@ def process_ticker(t, app_data_dict, market_bonus):
         sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
         if pd.isna(sma200): sma200 = curr
 
-        bsl, ssl, eq, entry, sl, found_fvg, found_sweep = calculate_smc(df_d)
+        # 這裡接收 sweep_type
+        bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
 
         is_bullish = curr > sma200
         in_discount = curr < eq
-        signal = "LONG" if (is_bullish and in_discount and (found_fvg or found_sweep)) else "WAIT"
+        # 修改 Signal 判斷：只要有 Sweep (無論 Major/Minor) 或 FVG 就考慮
+        signal = "LONG" if (is_bullish and in_discount and (found_fvg or sweep_type)) else "WAIT"
         
         indicators = calculate_indicators(df_d)
-        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, found_sweep, indicators)
+        # 傳入 sweep_type 給評分系統
+        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators)
         
         is_wait = (signal == "WAIT")
-        img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, found_sweep)
-        img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, found_sweep)
+        # 傳入 sweep_type 給繪圖系統
+        img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
+        img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, sweep_type)
 
         cls = "b-long" if signal == "LONG" else "b-wait"
         score_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
         
         elite_html = ""
-        if score >= 85 or found_sweep or rvol > 1.5:
+        # 只要分數高，或有 Sweep，或爆量，就顯示詳細分析
+        if score >= 85 or sweep_type or rvol > 1.5:
             reasons_html = "".join([f"<li>✅ {r}</li>" for r in reasons])
             confluence_text = f"🔥 <b>策略共振：</b> {strategies} 訊號" if strategies >= 2 else ""
             
             sweep_text = ""
-            if found_sweep:
-                sweep_text = "<div style='margin-top:8px;padding:8px;background:rgba(251,191,36,0.1);border-left:3px solid #fbbf24;color:#fcd34d;font-size:0.85rem;'><b>⚠️ 獵殺訊號 (Sweep)</b></div>"
+            if sweep_type == "MAJOR":
+                sweep_text = "<div style='margin-top:8px;padding:8px;background:rgba(239,68,68,0.1);border-left:3px solid #ef4444;color:#fca5a5;font-size:0.85rem;'><b>🌊 強力獵殺 (Major Sweep)</b><br>跌破20日低點後強勢收回，機構掃盤跡象明顯。</div>"
+            elif sweep_type == "MINOR":
+                sweep_text = "<div style='margin-top:8px;padding:8px;background:rgba(251,191,36,0.1);border-left:3px solid #fbbf24;color:#fcd34d;font-size:0.85rem;'><b>💧 短線獵殺 (Minor Sweep)</b><br>跌破10日低點後收回，短線資金進場。</div>"
             
             elite_html = f"""
             <div style='background:rgba(16,185,129,0.1);border:1px solid #10b981;padding:12px;border-radius:8px;margin:10px 0;'>
@@ -430,6 +457,7 @@ def process_ticker(t, app_data_dict, market_bonus):
                         <div style='font-size:1.1rem;font-weight:bold;color:#fbbf24'>{rr:.1f}R</div>
                     </div>
                 </div>
+
                 {elite_html}
                 <ul class='deploy-list'>
                     <li>Entry: ${entry:.2f}</li>
@@ -437,7 +465,7 @@ def process_ticker(t, app_data_dict, market_bonus):
                 </ul>
             </div>"""
         else:
-            reason = "無FVG/Sweep" if (not found_fvg and not found_sweep) else ("逆勢" if not is_bullish else "溢價區")
+            reason = "無FVG/Sweep" if (not found_fvg and not sweep_type) else ("逆勢" if not is_bullish else "溢價區")
             ai_html = f"<div class='deploy-box wait'><div class='deploy-title'>⏳ WAIT</div><div>狀態: {reason}</div></div>"
             
         app_data_dict[t] = {"signal": signal, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol}
@@ -483,7 +511,6 @@ def main():
             if t not in APP_DATA: continue
             data = APP_DATA[t]
             
-            # --- 顯示成交量邏輯 ---
             rvol_val = item['rvol']
             rvol_str = f"Vol {rvol_val:.1f}x"
             rvol_html = f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
@@ -554,4 +581,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# --- END OF CODE ---
