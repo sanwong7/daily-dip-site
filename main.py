@@ -14,6 +14,7 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
+import xml.etree.ElementTree as ET # 用來解析 RSS
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
@@ -21,7 +22,6 @@ API_KEY = os.environ.get("POLYGON_API_KEY")
 # --- 1. 自動化選股核心 ---
 
 def get_sp500_tickers():
-    """從 Wikipedia 抓取 S&P 500 成分股"""
     try:
         url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
         tables = pd.read_html(url)
@@ -106,23 +106,61 @@ def auto_select_candidates():
     print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
     return valid_tickers
 
-# --- 2. 新聞 ---
-def get_polygon_news():
-    if not API_KEY: return "<div style='padding:20px'>API Key Missing</div>"
+# --- 2. 新聞 (修改為 Google News 中文版) ---
+def get_google_news_zh():
+    """抓取 Google News 財經版 (繁體中文) RSS"""
     news_html = ""
     try:
-        url = f"https://api.polygon.io/v2/reference/news?limit=12&order=desc&sort=published_utc&apiKey={API_KEY}"
+        # Google News 台灣財經版 RSS URL
+        url = "https://news.google.com/rss/topics/CAAqLSgwKhowIQAqIwohCAqJAgwTCO_J_wQqlgIKDwgLCNq41gMww9jqBaIB?hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        
         resp = requests.get(url, timeout=10)
-        data = resp.json()
-        if data.get('results'):
-            for item in data['results']:
-                title = item.get('title')
-                url = item.get('article_url')
-                pub = item.get('publisher', {}).get('name', 'Unknown')
-                dt = item.get('published_utc', '')[:10]
-                news_html += f"<div class='news-item'><div class='news-meta'>{pub} • {dt}</div><a href='{url}' target='_blank' class='news-title'>{title}</a></div>"
-        else: news_html = "<div style='padding:20px'>暫無新聞</div>"
-    except: news_html = "News Error"
+        root = ET.fromstring(resp.content)
+        
+        # 限制顯示 15 則新聞
+        count = 0
+        for item in root.findall('./channel/item'):
+            if count >= 15: break
+            
+            title = item.find('title').text
+            link = item.find('link').text
+            pubDate = item.find('pubDate').text
+            
+            # 簡單處理標題 (去掉後面的媒體名稱)
+            if "-" in title:
+                title_parts = title.rsplit("-", 1)
+                clean_title = title_parts[0].strip()
+                source = title_parts[1].strip()
+            else:
+                clean_title = title
+                source = "Google News"
+
+            # 格式化日期
+            try:
+                dt_obj = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %Z")
+                date_str = dt_obj.strftime("%m/%d %H:%M")
+            except:
+                date_str = pubDate[:16]
+
+            # 製作美觀的新聞卡片
+            news_html += f"""
+            <div class='news-card'>
+                <div class='news-meta'>
+                    <span class='news-source'>{source}</span>
+                    <span class='news-date'>{date_str}</span>
+                </div>
+                <a href='{link}' target='_blank' class='news-title'>{clean_title}</a>
+            </div>
+            """
+            count += 1
+            
+        if not news_html:
+            news_html = "<div style='padding:20px;text-align:center'>暫無新聞</div>"
+            
+    except Exception as e:
+        print(f"News Error: {e}")
+        news_html = f"<div style='padding:20px'>無法載入新聞: {e}</div>"
+        
     return news_html
 
 # --- 3. 市場大盤分析 ---
@@ -315,7 +353,6 @@ def process_ticker(t, app_data_dict, market_bonus):
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
         
-        # --- 判斷訊號與具體原因 (優化三) ---
         is_bullish = curr > sma200
         in_discount = curr < eq
         
@@ -331,7 +368,6 @@ def process_ticker(t, app_data_dict, market_bonus):
         else:
             signal = "LONG"
             wait_reason = ""
-        # -------------------------------
 
         indicators = calculate_indicators(df_d)
         score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators)
@@ -356,10 +392,8 @@ def process_ticker(t, app_data_dict, market_bonus):
         if signal == "LONG":
             ai_html = f"<div class='deploy-box long'><div class='deploy-title'>✅ LONG SETUP</div><div style='display:flex;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:10px;'><div style='text-align:center'><div style='font-size:0.75rem;color:#94a3b8'>Current</div><div style='font-size:1.1rem;font-weight:bold;color:#f8fafc'>${curr:.2f}</div></div><div style='text-align:center'><div style='font-size:0.75rem;color:#94a3b8'>Target (TP)</div><div style='font-size:1.1rem;font-weight:bold;color:#10b981'>${tp:.2f}</div></div><div style='text-align:center'><div style='font-size:0.75rem;color:#94a3b8'>R:R</div><div style='font-size:1.1rem;font-weight:bold;color:#fbbf24'>{rr:.1f}R</div></div></div>{elite_html}<ul class='deploy-list'><li>Entry: ${entry:.2f}</li><li>SL: ${sl:.2f}</li></ul></div>"
         else:
-            # 這裡顯示詳細的 WAIT 原因
             ai_html = f"<div class='deploy-box wait'><div class='deploy-title'>⏳ WAIT: {wait_reason}</div><div>目前不建議進場，因為：{wait_reason}</div></div>"
             
-        # 把 wait_reason 存起來
         app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol}
         return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
     except Exception as e:
@@ -369,7 +403,9 @@ def process_ticker(t, app_data_dict, market_bonus):
 # --- 10. 主程式 ---
 def main():
     print("🚀 啟動超級篩選器 (Beta > 1, $Vol > 500M)...")
-    weekly_news_html = get_polygon_news()
+    # 🔥 這裡改成抓取中文新聞 🔥
+    weekly_news_html = get_google_news_zh()
+    
     market_status, market_text, market_bonus = get_market_condition()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
     
@@ -417,12 +453,10 @@ def main():
             if rvol_val > 1.5: rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>"
             elif rvol_val > 1.2: rvol_html = f"<span style='color:#fbbf24;font-size:0.8rem'>{rvol_str} ⚡</span>"
             
-            # --- 顯示 WAIT 原因 ---
             if d['signal'] == 'WAIT':
                 badge_html = f"<span class='badge b-wait' style='font-size:0.65rem'>{d['wait_reason']}</span>"
             else:
                 badge_html = "<span class='badge b-long'>LONG</span>"
-            # --------------------
 
             cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
@@ -430,7 +464,12 @@ def main():
     json_data = json.dumps(APP_DATA)
     final_html = f"""<!DOCTYPE html>
     <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
-    <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99; justify-content:center; overflow-y:auto; padding:10px; }} .m-content {{ background:var(--card); width:100%; max-width:600px; padding:15px; margin-top:20px; border-radius:12px; }} .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} @media (max-width: 600px) {{ .top-grid {{ grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }} }}</style></head>
+    <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99; justify-content:center; overflow-y:auto; padding:10px; }} .m-content {{ background:var(--card); width:100%; max-width:600px; padding:15px; margin-top:20px; border-radius:12px; }} .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} 
+    /* 新增新聞卡片樣式 */
+    .news-card {{ background:var(--card); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:10px; }}
+    .news-title {{ font-size:1rem; font-weight:bold; color:var(--text); text-decoration:none; display:block; margin-top:5px; }}
+    .news-meta {{ font-size:0.75rem; color:#94a3b8; display:flex; justify-content:space-between; }}
+    @media (max-width: 600px) {{ .top-grid {{ grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }} }}</style></head>
     <body>
     <div class="tradingview-widget-container" style="margin-bottom:15px">
       <div class="tradingview-widget-container__widget"></div>
@@ -448,7 +487,7 @@ def main():
         {top_5_html if top_5_html else "<div style='grid-column:1/-1;text-align:center;color:#666'>暫無資料</div>"}
     </div>
 
-    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 News</div></div>
+    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 即時新聞</div></div>
     
     <div id="overview" class="content active">
         {sector_html_blocks if sector_html_blocks else "<div style='text-align:center;padding:30px;color:#666'>今日市場極度冷清，無符合嚴格條件的股票 🐻</div>"}
@@ -458,7 +497,7 @@ def main():
           <div class="tradingview-widget-container__widget"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
           {{
-          "colorTheme": "dark", "isTransparent": true, "width": "100%", "height": "100%", "locale": "en", "importanceFilter": "-1,0,1", "currencyFilter": "USD"
+          "colorTheme": "dark", "isTransparent": true, "width": "100%", "height": "100%", "locale": "zh_TW", "importanceFilter": "-1,0,1", "currencyFilter": "USD"
           }}
           </script>
         </div>
@@ -495,11 +534,15 @@ def main():
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             
             if (isMobile) {{
+                // 優先嘗試喚醒 App (Deep Link)
                 window.location.href = 'tradingview://chart?symbol=' + currentTicker;
+                
+                // 保險：1.5秒後如果還沒跳轉成功，就去開網頁版
                 setTimeout(() => {{
                     window.location.href = 'https://www.tradingview.com/chart/?symbol=' + currentTicker;
                 }}, 1500);
             }} else {{
+                // 電腦版維持開新分頁
                 window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
             }}
         }};
