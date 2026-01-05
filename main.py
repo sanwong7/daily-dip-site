@@ -71,7 +71,7 @@ def get_stock_sector(ticker):
 def auto_select_candidates():
     print("🚀 啟動超級篩選器 (Criteria: Cap>3B, Price>SMA200, Vol>500M, Beta>=1)...")
     raw_tickers = get_sp500_tickers()
-    growth_adds = ["PLTR", "SOFI", "COIN", "MARA", "MSTR", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "ARM", "SMCI", "APP", "RDDT", "HIMS", "ASTS", "IONQ", "MU", "UBER", "ABNB"]
+    growth_adds = ["PLTR", "SOFI", "COIN", "MARA", "MSTR", "HOOD", "DKNG", "RBLX", "U", "CVNA", "OPEN", "SHOP", "ARM", "SMCI", "APP", "RDDT", "HIMS", "ASTS", "IONQ", "MU", "UBER", "ABNB", "TSM", "ASML", "NIO", "BABA", "PDD", "JD"]
     full_list = list(set(raw_tickers + growth_adds))
     valid_tickers = [] 
     try:
@@ -314,11 +314,28 @@ def process_ticker(t, app_data_dict, market_bonus):
         if pd.isna(sma200): sma200 = curr
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
+        
+        # --- 判斷訊號與具體原因 (優化三) ---
         is_bullish = curr > sma200
         in_discount = curr < eq
-        signal = "LONG" if (is_bullish and in_discount and (found_fvg or sweep_type)) else "WAIT"
+        
+        wait_reason = ""
+        signal = "WAIT"
+        
+        if not is_bullish:
+            wait_reason = "📉 逆勢"
+        elif not in_discount:
+            wait_reason = "💸 溢價"
+        elif not (found_fvg or sweep_type):
+            wait_reason = "💤 無訊號"
+        else:
+            signal = "LONG"
+            wait_reason = ""
+        # -------------------------------
+
         indicators = calculate_indicators(df_d)
         score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators)
+        
         is_wait = (signal == "WAIT")
         img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
         img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, sweep_type)
@@ -339,11 +356,12 @@ def process_ticker(t, app_data_dict, market_bonus):
         if signal == "LONG":
             ai_html = f"<div class='deploy-box long'><div class='deploy-title'>✅ LONG SETUP</div><div style='display:flex;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:10px;'><div style='text-align:center'><div style='font-size:0.75rem;color:#94a3b8'>Current</div><div style='font-size:1.1rem;font-weight:bold;color:#f8fafc'>${curr:.2f}</div></div><div style='text-align:center'><div style='font-size:0.75rem;color:#94a3b8'>Target (TP)</div><div style='font-size:1.1rem;font-weight:bold;color:#10b981'>${tp:.2f}</div></div><div style='text-align:center'><div style='font-size:0.75rem;color:#94a3b8'>R:R</div><div style='font-size:1.1rem;font-weight:bold;color:#fbbf24'>{rr:.1f}R</div></div></div>{elite_html}<ul class='deploy-list'><li>Entry: ${entry:.2f}</li><li>SL: ${sl:.2f}</li></ul></div>"
         else:
-            reason = "無FVG/Sweep" if (not found_fvg and not sweep_type) else ("逆勢" if not is_bullish else "溢價區")
-            ai_html = f"<div class='deploy-box wait'><div class='deploy-title'>⏳ WAIT</div><div>狀態: {reason}</div></div>"
+            # 這裡顯示詳細的 WAIT 原因
+            ai_html = f"<div class='deploy-box wait'><div class='deploy-title'>⏳ WAIT: {wait_reason}</div><div>目前不建議進場，因為：{wait_reason}</div></div>"
             
-        app_data_dict[t] = {"signal": signal, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol}
-        return {"ticker": t, "price": curr, "signal": signal, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
+        # 把 wait_reason 存起來
+        app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol}
+        return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
     except Exception as e:
         print(f"Err {t}: {e}")
         return None
@@ -398,7 +416,15 @@ def main():
             rvol_html = f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
             if rvol_val > 1.5: rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>"
             elif rvol_val > 1.2: rvol_html = f"<span style='color:#fbbf24;font-size:0.8rem'>{rvol_str} ⚡</span>"
-            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'><span class='badge {('b-long' if d['signal']=='LONG' else 'b-wait')}'>{d['signal']}</span></div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span>{rvol_html}</div></div>"
+            
+            # --- 顯示 WAIT 原因 ---
+            if d['signal'] == 'WAIT':
+                badge_html = f"<span class='badge b-wait' style='font-size:0.65rem'>{d['wait_reason']}</span>"
+            else:
+                badge_html = "<span class='badge b-long'>LONG</span>"
+            # --------------------
+
+            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
     json_data = json.dumps(APP_DATA)
@@ -406,6 +432,15 @@ def main():
     <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
     <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99; justify-content:center; overflow-y:auto; padding:10px; }} .m-content {{ background:var(--card); width:100%; max-width:600px; padding:15px; margin-top:20px; border-radius:12px; }} .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} @media (max-width: 600px) {{ .top-grid {{ grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }} }}</style></head>
     <body>
+    <div class="tradingview-widget-container" style="margin-bottom:15px">
+      <div class="tradingview-widget-container__widget"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+      {{
+      "symbols": [{{"proName": "FOREXCOM:SPXUSD", "title": "S&P 500"}},{{"proName": "FOREXCOM:NSXUSD", "title": "US 100"}},{{"proName": "FX_IDC:EURUSD", "title": "EUR/USD"}},{{"proName": "BITSTAMP:BTCUSD", "title": "Bitcoin"}},{{"proName": "BITSTAMP:ETHUSD", "title": "Ethereum"}}],
+      "showSymbolLogo": true, "colorTheme": "dark", "isTransparent": false, "displayMode": "adaptive", "locale": "en"
+      }}
+      </script>
+    </div>
     <div class="market-bar" style="border-left:4px solid {market_color}"><div>{ "🟢" if market_status=="BULLISH" else "🔴" }</div><div><b>Market: {market_status}</b><div style="font-size:0.8rem;color:#94a3b8">{market_text}</div></div></div>
     
     <h3 style='color:#fbbf24;margin-bottom:10px'>🏆 今日 Top 5 精選</h3>
@@ -414,7 +449,21 @@ def main():
     </div>
 
     <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 News</div></div>
-    <div id="overview" class="content active">{sector_html_blocks if sector_html_blocks else "<div style='text-align:center;padding:30px;color:#666'>今日市場極度冷清，無符合嚴格條件的股票 🐻</div>"}</div>
+    
+    <div id="overview" class="content active">
+        {sector_html_blocks if sector_html_blocks else "<div style='text-align:center;padding:30px;color:#666'>今日市場極度冷清，無符合嚴格條件的股票 🐻</div>"}
+        
+        <h3 style="margin-top:40px; border-bottom:1px solid #333; padding-bottom:10px;">📅 財經日曆 (Economic Calendar)</h3>
+        <div class="tradingview-widget-container" style="height:400px">
+          <div class="tradingview-widget-container__widget"></div>
+          <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
+          {{
+          "colorTheme": "dark", "isTransparent": true, "width": "100%", "height": "100%", "locale": "en", "importanceFilter": "-1,0,1", "currencyFilter": "USD"
+          }}
+          </script>
+        </div>
+        </div>
+
     <div id="news" class="content">{weekly_news_html}</div>
     <div style="text-align:center;color:#666;margin-top:30px;font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
     
@@ -446,15 +495,11 @@ def main():
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             
             if (isMobile) {{
-                // 優先嘗試喚醒 App (Deep Link)
                 window.location.href = 'tradingview://chart?symbol=' + currentTicker;
-                
-                // 保險：1.5秒後如果還沒跳轉成功，就去開網頁版
                 setTimeout(() => {{
                     window.location.href = 'https://www.tradingview.com/chart/?symbol=' + currentTicker;
                 }}, 1500);
             }} else {{
-                // 電腦版維持開新分頁
                 window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
             }}
         }};
