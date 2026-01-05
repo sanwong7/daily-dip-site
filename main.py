@@ -14,7 +14,6 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
@@ -106,63 +105,34 @@ def auto_select_candidates():
     print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
     return valid_tickers
 
-# --- 2. 新聞 (修正版：改用 Yahoo 奇摩股市 RSS) ---
-def get_google_news_zh():
-    """抓取 Yahoo 奇摩股市 (繁體中文) RSS"""
+# --- 2. 新聞 (切換回 Polygon 英文版，但在 HTML 中套用美觀樣式) ---
+def get_polygon_news():
+    if not API_KEY: return "<div style='padding:20px'>API Key Missing</div>"
     news_html = ""
     try:
-        # Yahoo 奇摩股市 - 美股焦點 RSS
-        url = "https://tw.stock.yahoo.com/rss?category=us-market"
-        
-        # 偽裝成瀏覽器，避免被擋
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        
-        resp = requests.get(url, headers=headers, timeout=10)
-        # 修正編碼問題
-        resp.encoding = 'utf-8'
-        
-        root = ET.fromstring(resp.content)
-        
-        count = 0
-        for item in root.findall('./channel/item'):
-            if count >= 15: break
-            
-            title = item.find('title').text
-            link = item.find('link').text
-            pubDate = item.find('pubDate').text
-            
-            # 格式化日期
-            try:
-                # Yahoo RSS 日期格式: Tue, 06 Jan 2026 05:30:00 +0800
-                dt_obj = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z")
-                date_str = dt_obj.strftime("%m/%d %H:%M")
-            except:
-                date_str = pubDate[:16]
-
-            news_html += f"""
-            <div class='news-card'>
-                <div class='news-meta'>
-                    <span class='news-source'>Yahoo 財經</span>
-                    <span class='news-date'>{date_str}</span>
+        url = f"https://api.polygon.io/v2/reference/news?limit=15&order=desc&sort=published_utc&apiKey={API_KEY}"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        if data.get('results'):
+            for item in data['results']:
+                title = item.get('title')
+                url = item.get('article_url')
+                pub = item.get('publisher', {}).get('name', 'Unknown')
+                dt = item.get('published_utc', '')[:10] # 取日期部分
+                
+                # 套用美觀的卡片樣式
+                news_html += f"""
+                <div class='news-card'>
+                    <div class='news-meta'>
+                        <span class='news-source'>{pub}</span>
+                        <span class='news-date'>{dt}</span>
+                    </div>
+                    <a href='{url}' target='_blank' class='news-title'>{title}</a>
                 </div>
-                <a href='{link}' target='_blank' class='news-title'>{title}</a>
-            </div>
-            """
-            count += 1
-            
-        if not news_html:
-            news_html = "<div style='padding:20px;text-align:center'>暫無新聞</div>"
-            
-    except Exception as e:
-        print(f"News Error: {e}")
-        # 如果 Yahoo 也掛了，顯示備用連結
-        news_html = f"""
-        <div style='padding:20px;text-align:center'>
-            無法載入新聞 ({e})<br>
-            <a href='https://news.cnyes.com/news/cat/us_stock' target='_blank' style='color:#3b82f6'>點此前往鉅亨網美股新聞</a>
-        </div>
-        """
-        
+                """
+        else: news_html = "<div style='padding:20px;text-align:center'>No News Found</div>"
+    except Exception as e: 
+        news_html = f"<div style='padding:20px'>News Error: {e}</div>"
     return news_html
 
 # --- 3. 市場大盤分析 ---
@@ -405,7 +375,7 @@ def process_ticker(t, app_data_dict, market_bonus):
 # --- 10. 主程式 ---
 def main():
     print("🚀 啟動超級篩選器 (Beta > 1, $Vol > 500M)...")
-    weekly_news_html = get_google_news_zh()
+    weekly_news_html = get_polygon_news()
     market_status, market_text, market_bonus = get_market_condition()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
     
@@ -496,7 +466,7 @@ def main():
           <div class="tradingview-widget-container__widget"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
           {{
-          "colorTheme": "dark", "isTransparent": true, "width": "100%", "height": "100%", "locale": "zh_TW", "importanceFilter": "-1,0,1", "currencyFilter": "USD"
+          "colorTheme": "dark", "isTransparent": true, "width": "100%", "height": "100%", "locale": "en", "importanceFilter": "-1,0,1", "currencyFilter": "USD"
           }}
           </script>
         </div>
@@ -533,11 +503,15 @@ def main():
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             
             if (isMobile) {{
+                // 優先嘗試喚醒 App (Deep Link)
                 window.location.href = 'tradingview://chart?symbol=' + currentTicker;
+                
+                // 保險：1.5秒後如果還沒跳轉成功，就去開網頁版
                 setTimeout(() => {{
                     window.location.href = 'https://www.tradingview.com/chart/?symbol=' + currentTicker;
                 }}, 1500);
             }} else {{
+                // 電腦版維持開新分頁
                 window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
             }}
         }};
