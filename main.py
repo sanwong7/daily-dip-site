@@ -240,7 +240,7 @@ def calculate_smc(df):
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 8. 繪圖核心 ---
+# --- 8. 繪圖核心 (修復文字被切 + 空白問題) ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#1e293b')
@@ -263,9 +263,20 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
         mc = mpf.make_marketcolors(up='#22c55e', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#334155', 'down':'#334155'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#334155', facecolor='#1e293b')
-        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), title=dict(title=f"{ticker} - {title}", color='white', size=14, weight='bold'), figsize=(6, 4), panel_ratios=(7, 2), scale_width_adjustment=dict(candle=1.2), returnfig=True, tight_layout=True)
+        
+        # 1. 調整 figsize (變寬一點)
+        # 2. 加入 tight_layout=True 讓 matplotlib 自動調整邊距
+        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), 
+            title=dict(title=f"{ticker} - {title}", color='white', size=14, weight='bold'), 
+            figsize=(7, 4.5), # 加大尺寸
+            panel_ratios=(7, 2), 
+            scale_width_adjustment=dict(candle=1.2), 
+            returnfig=True, 
+            tight_layout=True) # 自動修正邊界
+        
         fig.patch.set_facecolor('#1e293b')
         ax = axlist[0]; x_min, x_max = ax.get_xlim()
+        
         for i in range(2, len(plot_df)):
             idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
@@ -282,7 +293,11 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
             lowest = plot_df['Low'].min()
             label_text = "🌊 MAJOR SWEEP" if sweep_type == "MAJOR" else "💧 MINOR SWEEP"
             label_color = "#ef4444" if sweep_type == "MAJOR" else "#fbbf24" 
-            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-3, lowest*0.98), arrowprops=dict(facecolor=label_color, shrink=0.05), color=label_color, fontsize=10, fontweight='bold', ha='center')
+            # 3. 將文字稍微往左移一點 (x_max - 5)，避免切到
+            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-8, lowest*0.98), 
+                        arrowprops=dict(facecolor=label_color, shrink=0.05), 
+                        color=label_color, fontsize=10, fontweight='bold', ha='center')
+        
         line_style = ':' if is_wait else '-'
         ax.axhline(tp, color='#22c55e', linestyle=line_style, linewidth=1.5, alpha=0.8)
         ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1.5, alpha=0.9)
@@ -293,7 +308,9 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         if not is_wait:
             ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#22c55e', alpha=0.08))
             ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.08))
+        
         buf = BytesIO()
+        # 4. bbox_inches='tight' 是關鍵，它會自動裁剪多餘白邊
         fig.savefig(buf, format='png', bbox_inches='tight', facecolor='#1e293b', edgecolor='none', dpi=100)
         plt.close(fig)
         buf.seek(0)
@@ -431,7 +448,8 @@ def main():
     .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99; justify-content:center; overflow-y:auto; padding:10px; backdrop-filter: blur(5px); }} 
     .m-content {{ background:#1e293b; width:100%; max-width:600px; padding:20px; margin-top:40px; border-radius:16px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }} 
     
-    /* 🔥 修復圖片空白：強制圖片填滿寬度 🔥 */
+    /* 🔥 修復圖片空白：給容器加上最小高度 🔥 */
+    #chart-d, #chart-h {{ width: 100%; min-height: 300px; background: #1e293b; display: flex; align-items: center; justify-content: center; }}
     #chart-d img, #chart-h img {{ width: 100% !important; height: auto !important; display: block; border-radius: 8px; }}
 
     .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} 
@@ -484,11 +502,11 @@ def main():
             <div id="m-deploy"></div>
             <div style="margin-top:20px;">
                 <div style="font-weight:bold;color:#cbd5e1;margin-bottom:5px;">Daily SMC</div>
-                <div id="chart-d" style="border:1px solid #334155; border-radius:8px; overflow:hidden;"></div>
+                <div id="chart-d"></div>
             </div>
             <div style="margin-top:15px;">
                 <div style="font-weight:bold;color:#cbd5e1;margin-bottom:5px;">Hourly Entry</div>
-                <div id="chart-h" style="border:1px solid #334155; border-radius:8px; overflow:hidden;"></div>
+                <div id="chart-h"></div>
             </div>
             <button onclick="document.getElementById('modal').style.display='none'" style="width:100%;padding:15px;background:#334155;border:none;color:white;border-radius:8px;margin-top:20px;font-weight:bold;cursor:pointer;">Close</button>
         </div>
@@ -502,8 +520,8 @@ def main():
         document.getElementById('modal').style.display='flex';
         document.getElementById('m-ticker').innerText=t;
         document.getElementById('m-deploy').innerHTML=d.deploy;
-        document.getElementById('chart-d').innerHTML='<img src="'+d.img_d+'">';
-        document.getElementById('chart-h').innerHTML='<img src="'+d.img_h+'">';
+        document.getElementById('chart-d').innerHTML='<img src="'+d.img_d+'" style="width:100%; display:block;">';
+        document.getElementById('chart-h').innerHTML='<img src="'+d.img_h+'" style="width:100%; display:block;">';
         
         const btnArea=document.getElementById('btn-area'); btnArea.innerHTML='';
         const tvBtn=document.createElement('button'); tvBtn.innerText='📈 Chart';
