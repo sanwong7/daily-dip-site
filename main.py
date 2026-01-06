@@ -20,30 +20,30 @@ API_KEY = os.environ.get("POLYGON_API_KEY")
 
 # --- 1. 自動化選股核心 ---
 
-def get_sp500_tickers():
-    """抓取 S&P 500 成分股"""
-    try:
-        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        tables = pd.read_html(url)
-        df = tables[0]
-        tickers = df['Symbol'].tolist()
-        tickers = [t.replace('.', '-') for t in tickers]
-        return tickers
-    except: return []
+# 🔥 核心資產：Mag 7 + 熱門股 (優先掃描)
+PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "MARA", "TSM", "ASML", "ARM"]
 
-def get_nasdaq100_tickers():
-    """抓取 Nasdaq 100 成分股 (包含 TSM, ASML 等 ADR)"""
-    try:
-        url = 'https://en.wikipedia.org/wiki/Nasdaq-100'
-        tables = pd.read_html(url)
-        # Wikipedia Nasdaq 100 表格位置可能變動，通常是第 4 個表格
-        for table in tables:
-            if 'Ticker' in table.columns:
-                return table['Ticker'].tolist()
-            elif 'Symbol' in table.columns:
-                return table['Symbol'].tolist()
-        return []
-    except: return []
+# 完整靜態名單
+STATIC_UNIVERSE = [
+    # ⚡ 半導體與硬體
+    "QCOM", "INTC", "MU", "AMAT", "LRCX", "ADI", "TXN", "KLAC", "MRVL", "STM", "ON", "GFS", "SMCI", "DELL", "HPQ",
+    # 💻 軟體與雲端
+    "ORCL", "ADBE", "CRM", "SAP", "INTU", "IBM", "NOW", "UBER", "ABNB", "PANW", "SNPS", "CDNS", "CRWD", "SQ", "SHOP", "WDAY", "ROP", "SNOW", "DDOG", "ZS", "NET", "TEAM", "MDB", "PATH", "U", "APP", "RDDT", "IONQ",
+    # 🏦 金融與支付
+    "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "BLK", "C", "AXP", "PYPL", "AFRM", "UPST",
+    # 🛍️ 消費與零售
+    "WMT", "COST", "PG", "KO", "PEP", "MCD", "SBUX", "NKE", "DIS", "HD", "LOW", "TGT", "CMG", "LULU", "BKNG", "MAR", "HILTON", "CL",
+    # 💊 醫療
+    "LLY", "JNJ", "UNH", "ABBV", "MRK", "TMO", "DHR", "ISRG", "VRTX", "REGN", "PFE", "AMGN", "BMY", "CVS", "HIMS",
+    # 🏭 工業與能源
+    "CAT", "DE", "GE", "HON", "UNP", "UPS", "XOM", "CVX", "COP", "SLB", "EOG", "OXY",
+    # 🚗 電動車與汽車
+    "TM", "HMC", "STLA", "F", "GM", "RIVN", "LCID", "NIO", "XPEV", "LI",
+    # 🇨🇳 中概股 (ADR)
+    "BABA", "PDD", "JD", "BIDU", "TCEHY",
+    # 📡 通訊與其他
+    "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
+]
 
 def calculate_beta(stock_returns, market_returns):
     if len(stock_returns) != len(market_returns):
@@ -80,22 +80,10 @@ def get_stock_sector(ticker):
     except: return "🌐 其他產業"
 
 def auto_select_candidates():
-    print("🚀 啟動雙引擎超級篩選器 (S&P 500 + Nasdaq 100 + Growth)...")
+    print("🚀 啟動超級篩選器 (Priority First)...")
     
-    # 1. 獲取兩大指數名單
-    sp500 = get_sp500_tickers()
-    nasdaq100 = get_nasdaq100_tickers()
-    
-    # 2. 補充名單 (針對不在上述指數中的熱門股)
-    growth_adds = [
-        "PLTR", "SOFI", "COIN", "MARA", "MSTR", "HOOD", "DKNG", "RBLX", "U", "CVNA", 
-        "OPEN", "SHOP", "ARM", "SMCI", "APP", "RDDT", "HIMS", "ASTS", "IONQ", 
-        "UBER", "ABNB", "SQ", "NET", "CRWD", "NIO", "BABA", "PDD" 
-        # TSM, ASML 已經在 Nasdaq 100 裡了，不用重複加，但加了也沒關係(會自動去重)
-    ]
-    
-    # 合併並去重
-    full_list = list(set(sp500 + nasdaq100 + growth_adds))
+    # 合併名單：優先股放前面 + 其他股去重後放後面
+    full_list = PRIORITY_TICKERS + list(set(STATIC_UNIVERSE) - set(PRIORITY_TICKERS))
     print(f"📋 掃描池總數: {len(full_list)} 隻股票")
     
     valid_tickers = [] 
@@ -109,7 +97,7 @@ def auto_select_candidates():
     print(f"🔍 開始過濾...")
     for ticker in full_list:
         try:
-            # 1. 市值過濾 > 3B (加快速度)
+            # 1. 市值過濾 > 3B
             try:
                 info = yf.Ticker(ticker).fast_info
                 if info.market_cap < 3_000_000_000: continue
@@ -401,7 +389,7 @@ def process_ticker(t, app_data_dict, market_bonus):
 
 # --- 10. 主程式 ---
 def main():
-    print("🚀 啟動雙引擎超級篩選器 (S&P 500 + Nasdaq 100)...")
+    print("🚀 啟動超級篩選器 (Priority First)...")
     weekly_news_html = get_polygon_news()
     market_status, market_text, market_bonus = get_market_condition()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
@@ -483,7 +471,7 @@ def main():
         {top_5_html if top_5_html else "<div style='grid-column:1/-1;text-align:center;color:#666'>暫無資料</div>"}
     </div>
 
-    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 News</div></div>
+    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 即時新聞</div></div>
     
     <div id="overview" class="content active">
         {sector_html_blocks if sector_html_blocks else "<div style='text-align:center;padding:30px;color:#666'>今日市場極度冷清，無符合嚴格條件的股票 🐻</div>"}
@@ -530,15 +518,11 @@ def main():
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             
             if (isMobile) {{
-                // 優先嘗試喚醒 App (Deep Link)
                 window.location.href = 'tradingview://chart?symbol=' + currentTicker;
-                
-                // 保險：1.5秒後如果還沒跳轉成功，就去開網頁版
                 setTimeout(() => {{
                     window.location.href = 'https://www.tradingview.com/chart/?symbol=' + currentTicker;
                 }}, 1500);
             }} else {{
-                // 電腦版維持開新分頁
                 window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
             }}
         }};
