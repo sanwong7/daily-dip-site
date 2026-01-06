@@ -14,6 +14,7 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
+import xml.etree.ElementTree as ET
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
@@ -81,13 +82,10 @@ def get_stock_sector(ticker):
 
 def auto_select_candidates():
     print("🚀 啟動超級篩選器 (Priority First)...")
-    
-    # 合併名單：優先股放前面 + 其他股去重後放後面
     full_list = PRIORITY_TICKERS + list(set(STATIC_UNIVERSE) - set(PRIORITY_TICKERS))
     print(f"📋 掃描池總數: {len(full_list)} 隻股票")
     
     valid_tickers = [] 
-    
     try:
         spy = yf.Ticker("SPY").history(period="1y")
         if spy.empty: return []
@@ -97,37 +95,26 @@ def auto_select_candidates():
     print(f"🔍 開始過濾...")
     for ticker in full_list:
         try:
-            # 1. 市值過濾 > 3B
             try:
                 info = yf.Ticker(ticker).fast_info
                 if info.market_cap < 3_000_000_000: continue
             except: pass
-            
-            # 2. 抓 K 線
             df = yf.Ticker(ticker).history(period="1y")
             if df is None or len(df) < 200: continue
-            
-            # 3. 趨勢過濾 (SMA200)
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
             if close < sma200: continue 
-            
-            # 4. 成交額過濾 > 500M
             avg_vol = df['Volume'].tail(30).mean()
             avg_price = df['Close'].tail(30).mean()
             dollar_vol = avg_vol * avg_price
             if dollar_vol < 500_000_000: continue 
-            
-            # 5. Beta 過濾 > 1.0
             stock_returns = df['Close'].pct_change().dropna()
             beta = calculate_beta(stock_returns, spy_returns)
             if beta < 1.0: continue
-            
             sector_name = get_stock_sector(ticker)
             print(f"   ✅ {ticker} 入選! ({sector_name})")
             valid_tickers.append({'ticker': ticker, 'sector': sector_name})
         except: continue
-        
     print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
     return valid_tickers
 
@@ -199,7 +186,7 @@ def calculate_indicators(df):
     else: perf_30d = 0
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
-# --- 6. 評分系統 ---
+# --- 6. 評分系統 (解除 99 分上限) ---
 def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators):
     try:
         score = 60 + market_bonus
@@ -230,7 +217,9 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_t
         if trend: score += 5; reasons.append("📈 長期趨勢向上")
         if market_bonus > 0: reasons.append("🌍 大盤順風車 (+5)")
         if market_bonus < 0: reasons.append("🌪️ 逆大盤風險 (-10)")
-        return min(max(int(score), 0), 99), reasons, rr, rvol.iloc[-1], perf_30d, strategies
+        
+        # 🔥 修改處：這裡拿掉了 min(..., 99)，現在分數可以超過 100
+        return max(int(score), 0), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
 
 # --- 7. SMC 運算 ---
@@ -471,7 +460,7 @@ def main():
         {top_5_html if top_5_html else "<div style='grid-column:1/-1;text-align:center;color:#666'>暫無資料</div>"}
     </div>
 
-    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 即時新聞</div></div>
+    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 News</div></div>
     
     <div id="overview" class="content active">
         {sector_html_blocks if sector_html_blocks else "<div style='text-align:center;padding:30px;color:#666'>今日市場極度冷清，無符合嚴格條件的股票 🐻</div>"}
