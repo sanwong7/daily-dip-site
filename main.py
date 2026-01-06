@@ -240,7 +240,7 @@ def calculate_smc(df):
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 8. 繪圖核心 (修復文字被切 + 空白問題) ---
+# --- 8. 繪圖核心 ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#1e293b')
@@ -263,20 +263,9 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
         mc = mpf.make_marketcolors(up='#22c55e', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#334155', 'down':'#334155'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#334155', facecolor='#1e293b')
-        
-        # 1. 調整 figsize (變寬一點)
-        # 2. 加入 tight_layout=True 讓 matplotlib 自動調整邊距
-        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), 
-            title=dict(title=f"{ticker} - {title}", color='white', size=14, weight='bold'), 
-            figsize=(7, 4.5), # 加大尺寸
-            panel_ratios=(7, 2), 
-            scale_width_adjustment=dict(candle=1.2), 
-            returnfig=True, 
-            tight_layout=True) # 自動修正邊界
-        
+        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), title=dict(title=f"{ticker} - {title}", color='white', size=14, weight='bold'), figsize=(7, 4.5), panel_ratios=(7, 2), scale_width_adjustment=dict(candle=1.2), returnfig=True, tight_layout=True)
         fig.patch.set_facecolor('#1e293b')
         ax = axlist[0]; x_min, x_max = ax.get_xlim()
-        
         for i in range(2, len(plot_df)):
             idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
@@ -293,11 +282,7 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
             lowest = plot_df['Low'].min()
             label_text = "🌊 MAJOR SWEEP" if sweep_type == "MAJOR" else "💧 MINOR SWEEP"
             label_color = "#ef4444" if sweep_type == "MAJOR" else "#fbbf24" 
-            # 3. 將文字稍微往左移一點 (x_max - 5)，避免切到
-            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-8, lowest*0.98), 
-                        arrowprops=dict(facecolor=label_color, shrink=0.05), 
-                        color=label_color, fontsize=10, fontweight='bold', ha='center')
-        
+            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-8, lowest*0.98), arrowprops=dict(facecolor=label_color, shrink=0.05), color=label_color, fontsize=10, fontweight='bold', ha='center')
         line_style = ':' if is_wait else '-'
         ax.axhline(tp, color='#22c55e', linestyle=line_style, linewidth=1.5, alpha=0.8)
         ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1.5, alpha=0.9)
@@ -308,9 +293,7 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         if not is_wait:
             ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#22c55e', alpha=0.08))
             ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.08))
-        
         buf = BytesIO()
-        # 4. bbox_inches='tight' 是關鍵，它會自動裁剪多餘白邊
         fig.savefig(buf, format='png', bbox_inches='tight', facecolor='#1e293b', edgecolor='none', dpi=100)
         plt.close(fig)
         buf.seek(0)
@@ -355,7 +338,6 @@ def process_ticker(t, app_data_dict, market_bonus):
         img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
         img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, sweep_type)
         cls = "b-long" if signal == "LONG" else "b-wait"
-        score_color = "#10b981" if score >= 85 else ("#3b82f6" if score >= 70 else "#fbbf24")
         
         elite_html = ""
         if score >= 85 or sweep_type or rvol > 1.5:
@@ -370,12 +352,36 @@ def process_ticker(t, app_data_dict, market_bonus):
         
         stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
 
+        # 🔥 新增：倉位計算器 (Position Calculator) 🔥
+        calculator_html = f"""
+        <div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'>
+            <div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div>
+            <div style='display:flex; gap:10px; margin-bottom:10px;'>
+                <div style='flex:1;'>
+                    <div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div>
+                    <input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'>
+                </div>
+                <div style='flex:1;'>
+                    <div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div>
+                    <input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'>
+                </div>
+            </div>
+            <div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'>
+                <div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div>
+                <div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div>
+            </div>
+            <div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div>
+        </div>
+        """
+
         if signal == "LONG":
-            ai_html = f"<div class='deploy-box long' style='border:none; padding:0;'><div class='deploy-title' style='color:#10b981; font-size:1.3rem; margin-bottom:15px;'>✅ LONG SETUP</div>{stats_dashboard}{elite_html}<div style='background:#1e293b; padding:12px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-family:monospace; color:#cbd5e1;'><span>🔵 Entry: ${entry:.2f}</span><span style='color:#ef4444;'>🔴 SL: ${sl:.2f}</span></div></div>"
+            # 把 calculator_html 加進去
+            ai_html = f"<div class='deploy-box long' style='border:none; padding:0;'><div class='deploy-title' style='color:#10b981; font-size:1.3rem; margin-bottom:15px;'>✅ LONG SETUP</div>{stats_dashboard}{elite_html}{calculator_html}<div style='background:#1e293b; padding:12px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-family:monospace; color:#cbd5e1;'><span>🔵 Entry: ${entry:.2f}</span><span style='color:#ef4444;'>🔴 SL: ${sl:.2f}</span></div></div>"
         else:
             ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div><div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
             
-        app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol}
+        # 🔥 重要：把 entry 和 sl 數值傳給前端，方便 JS 計算
+        app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
         return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
     except Exception as e:
         print(f"Err {t}: {e}")
@@ -448,7 +454,6 @@ def main():
     .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99; justify-content:center; overflow-y:auto; padding:10px; backdrop-filter: blur(5px); }} 
     .m-content {{ background:#1e293b; width:100%; max-width:600px; padding:20px; margin-top:40px; border-radius:16px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }} 
     
-    /* 🔥 修復圖片空白：給容器加上最小高度 🔥 */
     #chart-d, #chart-h {{ width: 100%; min-height: 300px; background: #1e293b; display: flex; align-items: center; justify-content: center; }}
     #chart-d img, #chart-h img {{ width: 100% !important; height: auto !important; display: block; border-radius: 8px; }}
 
@@ -515,6 +520,30 @@ def main():
     <script>
     const DATA={json_data};
     function setTab(id,el){{document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}}
+    
+    // --- 🚀 自動計算器邏輯 ---
+    function updateCalculator(entry, sl) {{
+        const cap = parseFloat(document.getElementById('calc-capital').value) || 0;
+        const risk = parseFloat(document.getElementById('calc-risk').value) || 0;
+        const resultEl = document.getElementById('calc-result');
+        
+        // 保存設定
+        localStorage.setItem('user_capital', cap);
+        localStorage.setItem('user_risk', risk);
+        
+        if (cap > 0 && risk > 0 && entry > 0 && sl > 0 && entry > sl) {{
+            const riskAmount = cap * (risk / 100);
+            const riskPerShare = entry - sl;
+            const shares = Math.floor(riskAmount / riskPerShare);
+            resultEl.innerText = shares + " 股";
+            resultEl.style.color = "#fbbf24";
+        }} else {{
+            resultEl.innerText = "---";
+            resultEl.style.color = "#64748b";
+        }}
+    }}
+    // ----------------------
+
     function openModal(t){{
         const d=DATA[t];if(!d)return;
         document.getElementById('modal').style.display='flex';
@@ -540,8 +569,25 @@ def main():
                 window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
             }}
         }};
-        
         btnArea.appendChild(tvBtn);
+
+        // --- 🚀 初始化計算器 (如果有 LONG 訊號) ---
+        if (d.signal === "LONG") {{
+            const capInput = document.getElementById('calc-capital');
+            const riskInput = document.getElementById('calc-risk');
+            
+            // 讀取上次記憶
+            capInput.value = localStorage.getItem('user_capital') || '';
+            riskInput.value = localStorage.getItem('user_risk') || '1.0';
+            
+            // 綁定事件
+            const runCalc = () => updateCalculator(d.entry, d.sl);
+            capInput.oninput = runCalc;
+            riskInput.oninput = runCalc;
+            
+            // 立即計算一次
+            runCalc();
+        }}
     }}
     </script></body></html>"""
     
