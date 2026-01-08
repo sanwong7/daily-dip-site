@@ -309,8 +309,8 @@ def send_discord_alert(results):
         print("⚠️ No Discord Webhook configured.")
         return
 
-    # 只選 Score >= 90 且是 LONG 的前 3 名，避免洗版
-    top_picks = [r for r in results if r['score'] >= 90 and r['signal'] == "LONG"][:3]
+# 👇 測試用：只要分數 >= 0 就發送 (強迫它說話)
+top_picks = [r for r in results if r['score'] >= 0][:3]
     
     if not top_picks:
         print("ℹ️ No high-quality setups to alert.")
