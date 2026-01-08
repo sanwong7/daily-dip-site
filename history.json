@@ -3,32 +3,27 @@
         {
             "ticker": "DELL",
             "score": 100,
-            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d",
-            "rvol": 1.8760973891444042
+            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d"
         },
         {
             "ticker": "UNP",
             "score": 100,
-            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d",
-            "rvol": 1.6625127681307457
+            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d"
         },
         {
             "ticker": "AAPL",
             "score": 90,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4",
-            "rvol": 1.1554701318799816
+            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
         },
         {
             "ticker": "HPQ",
             "score": 90,
-            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d",
-            "rvol": 1.4185521952745508
+            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d"
         },
         {
             "ticker": "PG",
             "score": 90,
-            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d",
-            "rvol": 1.394546554995429
+            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d"
         }
     ]
 }
