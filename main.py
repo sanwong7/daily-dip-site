@@ -10,7 +10,6 @@ import numpy as np
 import base64
 import json
 import time
-import random  # 🔥 修正1: 補上遺失的 random，否則會報錯
 from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -20,7 +19,7 @@ import xml.etree.ElementTree as ET
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
-HISTORY_FILE = "history.json"
+HISTORY_FILE = "history.json"  # 🔥 新增：用來儲存歷史紀錄的檔案
 
 # --- 1. 自動化選股核心 ---
 
@@ -67,6 +66,7 @@ def generate_ticker_grid(picks, title, color_class="top-card"):
         score = p.get('score', 0)
         sector = p.get('sector', '')
         
+        # 樣式設定：歷史卡片稍微暗一點，區分今天
         style = "border-color:#fbbf24;" if color_class == "top-card" else "border:1px solid #475569; background:rgba(30,41,59,0.5); opacity: 0.9;"
         
         html += f"<div class='card {color_class}' onclick=\"openModal('{ticker}')\" style='{style}'>" \
@@ -75,25 +75,18 @@ def generate_ticker_grid(picks, title, color_class="top-card"):
                 f"<div style='font-size:0.7rem;color:#888'>{sector}</div></div>"
     html += "</div>"
     return html
-
 # -----------------------------------
 
 def calculate_beta(stock_returns, market_returns):
-    # 🔥 修正2: 如果抓不到大盤數據 (market_returns 空)，回傳 1.0 (預設值)，不要回傳 0
-    # 這樣股票才不會因為「沒大盤數據」而被全部過濾掉
-    if len(market_returns) == 0: return 1.0
-    
     if len(stock_returns) != len(market_returns):
         min_len = min(len(stock_returns), len(market_returns))
         stock_returns = stock_returns[-min_len:]
         market_returns = market_returns[-min_len:]
     if len(market_returns) < 2: return 0 
-    try:
-        covariance = np.cov(stock_returns, market_returns)[0][1]
-        variance = np.var(market_returns)
-        if variance == 0: return 0
-        return covariance / variance
-    except: return 1.0
+    covariance = np.cov(stock_returns, market_returns)[0][1]
+    variance = np.var(market_returns)
+    if variance == 0: return 0
+    return covariance / variance
 
 SECTOR_MAP = {
     "Technology": "💻 科技與軟體",
@@ -124,12 +117,9 @@ def auto_select_candidates():
     valid_tickers = [] 
     try:
         spy = yf.Ticker("SPY").history(period="1y")
-        if spy.empty: 
-            print("⚠️ SPY fetch failed, proceeding with default beta.")
-            spy_returns = []
-        else:
-            spy_returns = spy['Close'].pct_change().dropna()
-    except: spy_returns = []
+        if spy.empty: return []
+        spy_returns = spy['Close'].pct_change().dropna()
+    except: return []
     
     print(f"🔍 開始過濾...")
     for ticker in full_list:
@@ -138,26 +128,18 @@ def auto_select_candidates():
                 info = yf.Ticker(ticker).fast_info
                 if info.market_cap < 3_000_000_000: continue
             except: pass
-            
-            # 🔥 這裡用了 random，所以上面必須 import random
-            time.sleep(random.uniform(0.1, 0.3))
-            
             df = yf.Ticker(ticker).history(period="1y")
             if df is None or len(df) < 200: continue
-            
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
             if close < sma200: continue 
-            
             avg_vol = df['Volume'].tail(30).mean()
             avg_price = df['Close'].tail(30).mean()
             dollar_vol = avg_vol * avg_price
             if dollar_vol < 500_000_000: continue 
-            
             stock_returns = df['Close'].pct_change().dropna()
             beta = calculate_beta(stock_returns, spy_returns)
             if beta < 1.0: continue
-            
             sector_name = get_stock_sector(ticker)
             print(f"   ✅ {ticker} 入選! ({sector_name})")
             valid_tickers.append({'ticker': ticker, 'sector': sector_name})
@@ -205,8 +187,6 @@ def get_market_condition():
 # --- 4. 數據獲取 & 財報檢查 ---
 def fetch_data_safe(ticker, period, interval):
     try:
-        # 🔥 隨機延遲 (需要 random)
-        time.sleep(random.uniform(0.1, 0.2))
         dat = yf.Ticker(ticker).history(period=period, interval=interval)
         if dat is None or dat.empty: return None
         if not isinstance(dat.index, pd.DatetimeIndex): dat.index = pd.to_datetime(dat.index)
@@ -319,7 +299,7 @@ def calculate_smc(df):
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 8. 繪圖核心 ---
+# --- 8. 繪圖核心 (徹底修復白邊與文字) ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#1e293b')
@@ -343,11 +323,14 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         mc = mpf.make_marketcolors(up='#22c55e', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#334155', 'down':'#334155'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#334155', facecolor='#1e293b')
         
+        # 🔥 修改處：調整 figsize, panel_ratios 和 padding
         fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), 
-            title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), 
-            figsize=(8, 5), panel_ratios=(6, 2), 
+            title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), # 字體加大
+            figsize=(8, 5), # 畫布變大
+            panel_ratios=(6, 2), 
             scale_width_adjustment=dict(candle=1.2), 
-            returnfig=True, tight_layout=True)
+            returnfig=True, 
+            tight_layout=True) # 強制緊湊佈局
         
         fig.patch.set_facecolor('#1e293b')
         ax = axlist[0]; x_min, x_max = ax.get_xlim()
@@ -368,6 +351,8 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
             lowest = plot_df['Low'].min()
             label_text = "🌊 MAJOR SWEEP" if sweep_type == "MAJOR" else "💧 MINOR SWEEP"
             label_color = "#ef4444" if sweep_type == "MAJOR" else "#fbbf24" 
+            
+            # 🔥 修改處：將文字往左移動更多 (x_max - 10) 避免被切
             ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-10, lowest*0.98), 
                         arrowprops=dict(facecolor=label_color, shrink=0.05), 
                         color=label_color, fontsize=11, fontweight='bold', ha='center')
@@ -384,6 +369,7 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
             ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.08))
         
         buf = BytesIO()
+        # 🔥 關鍵修復：bbox_inches='tight', pad_inches=0 (完全切除白邊)
         fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1, facecolor='#1e293b', edgecolor='none', dpi=100)
         plt.close(fig)
         buf.seek(0)
@@ -394,11 +380,18 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
 
 # --- 9. Discord 通知 ---
 def send_discord_alert(results):
-    if not DISCORD_WEBHOOK: return
+    if not DISCORD_WEBHOOK:
+        print("⚠️ No Discord Webhook configured. Skipping alerts.")
+        return
 
+    # 改回正常門檻：Score >= 85
     top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
     
-    if not top_picks: return
+    if not top_picks:
+        print("ℹ️ No high-quality setups found to alert.")
+        return
+
+    print(f"🚀 Sending alerts for: {[p['ticker'] for p in top_picks]}")
 
     embeds = []
     for pick in top_picks:
@@ -417,10 +410,18 @@ def send_discord_alert(results):
         }
         embeds.append(embed)
 
-    payload = { "username": "Daily Dip Bot", "embeds": embeds }
+    payload = {
+        "username": "Daily Dip Bot",
+        "embeds": embeds
+    }
 
     try:
-        requests.post(DISCORD_WEBHOOK, json=payload)
+        resp = requests.post(DISCORD_WEBHOOK, json=payload)
+        if resp.status_code == 204:
+            print("✅ Discord alert sent successfully!")
+        else:
+            print(f"⚠️ Discord returned status code: {resp.status_code}")
+            print(resp.text)
     except Exception as e:
         print(f"❌ Failed to send Discord alert: {e}")
 
@@ -437,6 +438,7 @@ def process_ticker(t, app_data_dict, market_bonus):
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
         
+        # 🔥 新增：財報檢查
         earnings_warning = check_earnings(t) 
         
         is_bullish = curr > sma200
@@ -458,8 +460,8 @@ def process_ticker(t, app_data_dict, market_bonus):
         is_wait = (signal == "WAIT")
         img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
         img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, sweep_type)
+        cls = "b-long" if signal == "LONG" else "b-wait"
         
-        # HTML 構造
         elite_html = ""
         if score >= 85 or sweep_type or rvol > 1.5:
             reasons_html = "".join([f"<li style='margin-bottom:4px;'>✅ {r}</li>" for r in reasons])
@@ -475,6 +477,7 @@ def process_ticker(t, app_data_dict, market_bonus):
 
         calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
 
+        # 🔥 財報警告 HTML 🔥
         earn_html = ""
         if earnings_warning:
             earn_html = f"<div style='background:rgba(239,68,68,0.2); color:#fca5a5; padding:8px; border-radius:6px; font-weight:bold; margin-bottom:10px; text-align:center; border:1px solid #ef4444;'>💣 {earnings_warning}</div>"
@@ -485,7 +488,7 @@ def process_ticker(t, app_data_dict, market_bonus):
             ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div>{earn_html}<div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
             
         app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
-        return {"ticker": t, "sector": item['sector'], "price": curr, "signal": signal, "wait_reason": wait_reason, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}, "earn": earnings_warning}
+        return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}, "earn": earnings_warning}
     except Exception as e:
         print(f"Err {t}: {e}")
         return None
@@ -503,10 +506,11 @@ def main():
     
     for item in candidates_data:
         t = item['ticker']
+        sector = item['sector']
         res = process_ticker(t, APP_DATA, market_bonus)
         if res:
             if res['signal'] == "LONG": screener_rows_list.append(res)
-            processed_results.append(res)
+            processed_results.append({'ticker': t, 'sector': sector, 'score': res['score'], 'signal': res['signal'], 'price': res['price'], 'data': res['data'], 'earn': res['earn']})
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
     
@@ -580,24 +584,22 @@ def main():
             cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>{earn_badge}<span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span></span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
-    json_str = json.dumps(APP_DATA)
-    # 🔥 使用 Base64 編碼，徹底解決 JSON 語法錯誤導致的空白問題
-    b64_data = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
-
+    json_data = json.dumps(APP_DATA)
     final_html = f"""<!DOCTYPE html>
     <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
     <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} 
+    
     .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99; justify-content:center; overflow-y:auto; padding:10px; backdrop-filter: blur(5px); }} 
     .m-content {{ background:#1e293b; width:100%; max-width:600px; padding:20px; margin-top:40px; border-radius:16px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }} 
+    
     #chart-d, #chart-h {{ width: 100%; min-height: 300px; background: #1e293b; display: flex; align-items: center; justify-content: center; }}
     #chart-d img, #chart-h img {{ width: 100% !important; height: auto !important; display: block; border-radius: 8px; }}
+
     .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} 
-    .macro-grid {{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:15px; height: 120px; }}
-    .macro-card {{ width: 100%; height: 100%; }}
     .news-card {{ background:var(--card); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:10px; }}
     .news-title {{ font-size:1rem; font-weight:bold; color:var(--text); text-decoration:none; display:block; margin-top:5px; }}
     .news-meta {{ font-size:0.75rem; color:#94a3b8; display:flex; justify-content:space-between; }}
-    @media (max-width: 600px) {{ .top-grid, .macro-grid {{ grid-template-columns: repeat(2, 1fr); }} }}</style></head>
+    @media (max-width: 600px) {{ .top-grid {{ grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }} }}</style></head>
     <body>
     <div class="tradingview-widget-container" style="margin-bottom:15px">
       <div class="tradingview-widget-container__widget"></div>
@@ -610,7 +612,7 @@ def main():
     </div>
     <div class="market-bar" style="border-left:4px solid {market_color}"><div>{ "🟢" if market_status=="BULLISH" else "🔴" }</div><div><b>Market: {market_status}</b><div style="font-size:0.8rem;color:#94a3b8">{market_text}</div></div></div>
     
-    <div class="macro-grid">
+    <div class="macro-grid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:15px; height: 120px;">
         <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "CBOE:VIX","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
         <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "BINANCE:BTCUSDT","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
         <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "TVC:DXY","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
@@ -635,7 +637,7 @@ def main():
           }}
           </script>
         </div>
-    </div>
+        </div>
 
     <div id="news" class="content">{weekly_news_html}</div>
     <div style="text-align:center;color:#666;margin-top:30px;font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
@@ -660,9 +662,7 @@ def main():
     </div>
 
     <script>
-    const rawData = "{b64_data}";
-    const DATA = JSON.parse(atob(rawData));
-
+    const DATA={json_data};
     function setTab(id,el){{document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}}
     
     function updateCalculator(entry, sl) {{
