@@ -303,17 +303,24 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         print(f"Plot Error: {e}")
         return create_error_image("Plot Error")
 
-# --- 9. Discord 通知 (修復崩潰問題) ---
+# --- 9. Discord 通知 (測試模式：門檻 Score > 0) ---
 def send_discord_alert(results):
     if not DISCORD_WEBHOOK:
         print("⚠️ No Discord Webhook configured. Skipping alerts.")
         return
 
-    # 改回正常門檻：Score >= 85
-    top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
+    # 🔥 測試訊息：系統啟動通知
+    try:
+        print("🔔 Sending Test Message...")
+        requests.post(DISCORD_WEBHOOK, json={"content": "🔔 **Daily Dip System Started!** (Connection Test)"})
+    except Exception as e:
+        print(f"❌ Failed to send Test Message: {e}")
+
+    # 🔥 測試模式：門檻降為 0，只要有股票就發送 (用完記得改回 85)
+    top_picks = [r for r in results if r['score'] >= 0][:3]
     
     if not top_picks:
-        print("ℹ️ No high-quality setups found to alert.")
+        print("ℹ️ No setups found to alert.")
         return
 
     print(f"🚀 Sending alerts for: {[p['ticker'] for p in top_picks]}")
@@ -331,7 +338,7 @@ def send_discord_alert(results):
                 {"name": "Current", "value": f"${pick['price']:.2f}", "inline": True},
                 {"name": "Status", "value": "✅ LONG", "inline": True}
             ],
-            "footer": {"text": "Daily Dip Pro • SMC Strategy"}
+            "footer": {"text": "Daily Dip Pro • SMC Strategy (TEST MODE)"}
         }
         embeds.append(embed)
 
@@ -435,6 +442,11 @@ def process_ticker(t, app_data_dict, market_bonus):
 # --- 11. 主程式 ---
 def main():
     print("🚀 啟動超級篩選器 (Priority First)...")
+    if DISCORD_WEBHOOK:
+        print(f"🔍 Discord Webhook found: {DISCORD_WEBHOOK[:10]}...")
+    else:
+        print("⚠️ No Discord Webhook environment variable found.")
+
     weekly_news_html = get_polygon_news()
     market_status, market_text, market_bonus = get_market_condition()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
@@ -453,7 +465,7 @@ def main():
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
     
-    # 發送 Discord 通知
+    # 🔥 發送 Discord 通知
     send_discord_alert(processed_results)
 
     top_5_tickers = processed_results[:5]
