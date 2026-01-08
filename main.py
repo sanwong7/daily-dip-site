@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
+HISTORY_FILE = "history.json"  # 🔥 新增：用來儲存歷史紀錄的檔案
 
 # --- 1. 自動化選股核心 ---
 
@@ -35,6 +36,46 @@ STATIC_UNIVERSE = [
     "BABA", "PDD", "JD", "BIDU", "TCEHY",
     "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
 ]
+
+# --- 🔥 新增：歷史紀錄管理模組 ---
+def load_history():
+    """讀取歷史紀錄"""
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r") as f:
+                return json.load(f)
+        except: return {}
+    return {}
+
+def save_history(history):
+    """儲存歷史紀錄"""
+    try:
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(history, f, indent=4)
+    except Exception as e:
+        print(f"❌ Failed to save history: {e}")
+
+def generate_ticker_grid(picks, title, color_class="top-card"):
+    """輔助函數：生成股票卡片 Grid HTML"""
+    if not picks:
+        return f"<h3 style='color:#fbbf24; margin-top:30px;'>{title}</h3><div style='color:#666; margin-bottom:20px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px;'>暫無歷史數據</div>"
+    
+    html = f"<h3 style='color:#fbbf24; margin-top:30px;'>{title}</h3><div class='top-grid'>"
+    for p in picks:
+        ticker = p.get('ticker')
+        score = p.get('score', 0)
+        sector = p.get('sector', '')
+        
+        # 樣式設定：歷史卡片稍微暗一點，區分今天
+        style = "border-color:#fbbf24;" if color_class == "top-card" else "border:1px solid #475569; background:rgba(30,41,59,0.5); opacity: 0.9;"
+        
+        html += f"<div class='card {color_class}' onclick=\"openModal('{ticker}')\" style='{style}'>" \
+                f"<div style='font-size:1.2rem;margin-bottom:5px'><b>{ticker}</b></div>" \
+                f"<div style='color:{'#10b981' if score >= 80 else '#94a3b8'};font-weight:bold'>{score}</div>" \
+                f"<div style='font-size:0.7rem;color:#888'>{sector}</div></div>"
+    html += "</div>"
+    return html
+# -----------------------------------
 
 def calculate_beta(stock_returns, market_returns):
     if len(stock_returns) != len(market_returns):
@@ -473,24 +514,43 @@ def main():
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
     
+    # --- 🔥 歷史數據處理邏輯 (History Logic) 🔥 ---
+    history = load_history()
+    
+    # 設定日期字串
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    day_before_str = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+
+    # 儲存今天的 Top 5
+    top_5_today = []
+    for r in processed_results[:5]:
+        top_5_today.append({
+            "ticker": r['ticker'], 
+            "score": r['score'], 
+            "sector": r['sector']
+        })
+    history[today_str] = top_5_today
+    save_history(history) # 寫入檔案
+    print(f"✅ History saved for {today_str}")
+
+    # 讀取昨天的和前天的
+    yesterday_picks = history.get(yesterday_str, [])
+    day_before_picks = history.get(day_before_str, [])
+    # ---------------------------------------------
+
     # 發送 Discord 通知
     send_discord_alert(processed_results)
 
     top_5_tickers = processed_results[:5]
     
-    top_5_html = ""
-    rank_icons = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
-    for i, item in enumerate(top_5_tickers):
-        t = item['ticker']
-        d = APP_DATA[t]
-        rank_icon = rank_icons[i]
-        rvol_val = d['rvol']
-        fire = "🔥" if rvol_val > 1.5 else ""
-        
-        # 🔥 在 Top 5 也加上財報警告小圖示
-        earn_icon = "💣" if processed_results[i]['earn'] else ""
-        
-        top_5_html += f"<div class='card top-card' onclick=\"openModal('{t}')\" style='border-color:#fbbf24;background:rgba(251,191,36,0.1)'><div style='font-size:1.2rem;margin-bottom:5px'>{rank_icon} {t} {earn_icon}</div><div style='font-size:0.8rem;color:#ddd'>Score <b style='color:#10b981'>{d['score']}</b> {fire}</div><div style='font-size:0.7rem;color:#94a3b8;margin-top:2px'>{item['sector']}</div></div>"
+    # --- 生成 HTML ---
+    # 今日精選
+    top_5_html = generate_ticker_grid(top_5_today, "🏆 Today's Top 5")
+    # 昨日精選
+    yesterday_html = generate_ticker_grid(yesterday_picks, f"🥈 Yesterday's Picks ({yesterday_str})", "top-card")
+    # 前日精選
+    day_before_html = generate_ticker_grid(day_before_picks, f"🥉 Day Before's Picks ({day_before_str})", "top-card")
 
     sector_groups = {}
     for item in processed_results:
@@ -552,10 +612,16 @@ def main():
     </div>
     <div class="market-bar" style="border-left:4px solid {market_color}"><div>{ "🟢" if market_status=="BULLISH" else "🔴" }</div><div><b>Market: {market_status}</b><div style="font-size:0.8rem;color:#94a3b8">{market_text}</div></div></div>
     
-    <h3 style='color:#fbbf24;margin-bottom:10px'>🏆 今日 Top 5 精選</h3>
-    <div class='top-grid'>
-        {top_5_html if top_5_html else "<div style='grid-column:1/-1;text-align:center;color:#666'>暫無資料</div>"}
+    <div class="macro-grid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:15px; height: 120px;">
+        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "CBOE:VIX","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
+        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "BINANCE:BTCUSDT","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
+        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "TVC:DXY","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
+        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "TVC:US10Y","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
     </div>
+
+    {top_5_html}
+    {yesterday_html}
+    {day_before_html}
 
     <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 News</div></div>
     
