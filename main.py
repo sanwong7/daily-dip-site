@@ -10,18 +10,17 @@ import numpy as np
 import base64
 import json
 import time
+import random
 from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
 
 # --- 1. 自動化選股核心 ---
-
 PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "MARA", "TSM", "ASML", "ARM"]
 
 STATIC_UNIVERSE = [
@@ -47,26 +46,18 @@ def calculate_beta(stock_returns, market_returns):
     if variance == 0: return 0
     return covariance / variance
 
-SECTOR_MAP = {
-    "Technology": "💻 科技與軟體",
-    "Communication Services": "📡 通訊與媒體",
-    "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
-    "Consumer Defensive": "🛒 必需消費 (防禦)",
-    "Financial Services": "🏦 金融服務",
-    "Healthcare": "💊 醫療保健",
-    "Energy": "🛢️ 能源",
-    "Industrials": "🏭 工業",
-    "Basic Materials": "🧱 原物料",
-    "Real Estate": "🏠 房地產",
-    "Utilities": "💡 公用事業"
-}
-
 def get_stock_sector(ticker):
     try:
         info = yf.Ticker(ticker).info
         sector = info.get('sector', 'Unknown')
         industry = info.get('industry', 'Unknown')
         if "Semiconductor" in industry: return "⚡ 半導體"
+        
+        SECTOR_MAP = {
+            "Technology": "💻 科技與軟體", "Communication Services": "📡 通訊與媒體", "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
+            "Consumer Defensive": "🛒 必需消費 (防禦)", "Financial Services": "🏦 金融服務", "Healthcare": "💊 醫療保健",
+            "Energy": "🛢️ 能源", "Industrials": "🏭 工業", "Basic Materials": "🧱 原物料", "Real Estate": "🏠 房地產", "Utilities": "💡 公用事業"
+        }
         return SECTOR_MAP.get(sector, "🌐 其他產業")
     except: return "🌐 其他產業"
 
@@ -74,36 +65,48 @@ def auto_select_candidates():
     print("🚀 啟動超級篩選器 (Priority First)...")
     full_list = PRIORITY_TICKERS + list(set(STATIC_UNIVERSE) - set(PRIORITY_TICKERS))
     valid_tickers = [] 
+    
     try:
         spy = yf.Ticker("SPY").history(period="1y")
-        if spy.empty: return []
-        spy_returns = spy['Close'].pct_change().dropna()
-    except: return []
+        if spy.empty: 
+            print("⚠️ SPY data empty, assuming market neutral.")
+            spy_returns = []
+        else:
+            spy_returns = spy['Close'].pct_change().dropna()
+    except Exception as e:
+        print(f"⚠️ SPY fetch failed: {e}")
+        spy_returns = []
     
-    print(f"🔍 開始過濾...")
+    print(f"🔍 開始掃描 {len(full_list)} 隻股票...")
+    
     for ticker in full_list:
         try:
-            try:
-                info = yf.Ticker(ticker).fast_info
-                if info.market_cap < 3_000_000_000: continue
-            except: pass
+            # 🔥 增加延遲，避免被 Yahoo 封鎖
+            time.sleep(random.uniform(0.1, 0.3)) 
+            
             df = yf.Ticker(ticker).history(period="1y")
-            if df is None or len(df) < 200: continue
+            
+            if df is None or len(df) < 200: 
+                # print(f"   ❌ {ticker}: No Data or Too Short")
+                continue
+            
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
-            if close < sma200: continue 
+            
+            # 🔥 暫時放寬過濾條件：只要有資料就先過，讓我們確認數據流是否通暢
+            # if close < sma200: continue 
+            
             avg_vol = df['Volume'].tail(30).mean()
-            avg_price = df['Close'].tail(30).mean()
-            dollar_vol = avg_vol * avg_price
-            if dollar_vol < 500_000_000: continue 
-            stock_returns = df['Close'].pct_change().dropna()
-            beta = calculate_beta(stock_returns, spy_returns)
-            if beta < 1.0: continue
+            if (avg_vol * close) < 100_000_000: continue # 降低流動性門檻測試
+            
             sector_name = get_stock_sector(ticker)
-            print(f"   ✅ {ticker} 入選! ({sector_name})")
+            print(f"   ✅ {ticker} 入選! (Close: {close:.2f})")
             valid_tickers.append({'ticker': ticker, 'sector': sector_name})
-        except: continue
-    print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
+        except Exception as e:
+            print(f"   ⚠️ Error {ticker}: {e}")
+            continue
+    
+    print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻候選股。")
     return valid_tickers
 
 # --- 2. 新聞 ---
@@ -130,20 +133,14 @@ def get_market_condition():
     try:
         print("🔍 Checking Market...")
         spy = yf.Ticker("SPY").history(period="6mo")
-        qqq = yf.Ticker("QQQ").history(period="6mo")
-        if spy.empty or qqq.empty: return "NEUTRAL", "數據不足", 0
-        spy_50 = spy['Close'].rolling(50).mean().iloc[-1]
+        if spy.empty: return "NEUTRAL", "數據不足", 0
         spy_curr = spy['Close'].iloc[-1]
-        qqq_50 = qqq['Close'].rolling(50).mean().iloc[-1]
-        qqq_curr = qqq['Close'].iloc[-1]
-        is_bullish = (spy_curr > spy_50) and (qqq_curr > qqq_50)
-        is_bearish = (spy_curr < spy_50) and (qqq_curr < qqq_50)
-        if is_bullish: return "BULLISH", "🟢 市場順風 (大盤 > 50MA)", 5
-        elif is_bearish: return "BEARISH", "🔴 市場逆風 (大盤 < 50MA)", -10
-        else: return "NEUTRAL", "🟡 市場震盪", 0
+        spy_50 = spy['Close'].rolling(50).mean().iloc[-1]
+        
+        if spy_curr > spy_50: return "BULLISH", "🟢 市場順風 (大盤 > 50MA)", 5
+        else: return "BEARISH", "🔴 市場逆風 (大盤 < 50MA)", -10
     except: return "NEUTRAL", "Check Failed", 0
 
-# 🔥 宏觀數據 (TradingView Widgets) 🔥
 def get_macro_data_html():
     return """
     <div class="macro-grid">
@@ -156,6 +153,8 @@ def get_macro_data_html():
 # --- 4. 數據獲取 & 財報檢查 ---
 def fetch_data_safe(ticker, period, interval):
     try:
+        # 🔥 增加延遲
+        time.sleep(random.uniform(0.1, 0.2))
         dat = yf.Ticker(ticker).history(period=period, interval=interval)
         if dat is None or dat.empty: return None
         if not isinstance(dat.index, pd.DatetimeIndex): dat.index = pd.to_datetime(dat.index)
@@ -173,11 +172,9 @@ def check_earnings(ticker):
                 if dates: earnings_date = dates[0]
             else:
                 earnings_date = calendar.iloc[0, 0]
-            
             if isinstance(earnings_date, (datetime, pd.Timestamp)):
                 days_diff = (earnings_date.date() - datetime.now().date()).days
-                if 0 <= days_diff <= 7:
-                    return f"⚠️ Earnings: {days_diff}d"
+                if 0 <= days_diff <= 7: return f"⚠️ Earnings: {days_diff}d"
     except: pass
     return ""
 
@@ -194,11 +191,9 @@ def calculate_indicators(df):
     sma200 = df['Close'].rolling(200).mean()
     golden_cross = False
     if len(sma50) > 5:
-        if sma50.iloc[-1] > sma200.iloc[-1] and sma50.iloc[-5] <= sma200.iloc[-5]:
-            golden_cross = True
+        if sma50.iloc[-1] > sma200.iloc[-1] and sma50.iloc[-5] <= sma200.iloc[-5]: golden_cross = True
     trend_bullish = sma50.iloc[-1] > sma200.iloc[-1] if len(sma200) > 0 else False
-    if len(df) > 30:
-        perf_30d = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30] * 100
+    if len(df) > 30: perf_30d = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30] * 100
     else: perf_30d = 0
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
@@ -209,10 +204,8 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_t
         reasons = []
         rsi, rvol, golden_cross, trend, perf_30d = indicators
         strategies = 0
-        if sweep_type == "MAJOR":
-            strategies += 1; score += 25; reasons.append("🌊 強力獵殺 (Major Sweep >20d)")
-        elif sweep_type == "MINOR":
-            strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep >10d)")
+        if sweep_type == "MAJOR": strategies += 1; score += 25; reasons.append("🌊 強力獵殺 (Major Sweep >20d)")
+        elif sweep_type == "MINOR": strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep >10d)")
         if golden_cross: strategies += 1
         if 40 <= rsi.iloc[-1] <= 55: strategies += 1
         risk = entry - sl
@@ -338,7 +331,6 @@ def send_discord_alert(results):
         return
 
     top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
-    
     if not top_picks:
         print("ℹ️ No high-quality setups found to alert.")
         return
@@ -354,16 +346,13 @@ def send_discord_alert(results):
             "fields": [
                 {"name": "Entry", "value": f"${data['entry']:.2f}", "inline": True},
                 {"name": "Stop Loss", "value": f"${data['sl']:.2f}", "inline": True},
-                {"name": "Current", "value": f"${pick['price']:.2f}", "inline": True},
                 {"name": "Status", "value": "✅ LONG", "inline": True}
             ],
             "footer": {"text": "Daily Dip Pro • SMC Strategy"}
         }
         embeds.append(embed)
 
-    payload = {"username": "Daily Dip Bot", "embeds": embeds}
-    try:
-        requests.post(DISCORD_WEBHOOK, json=payload)
+    try: requests.post(DISCORD_WEBHOOK, json={"username": "Daily Dip Bot", "embeds": embeds})
     except: pass
 
 # --- 10. 主處理邏輯 ---
@@ -380,12 +369,9 @@ def process_ticker(t, app_data_dict, market_bonus):
         
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
-        
         earnings_warning = check_earnings(t) 
-        
         is_bullish = curr > sma200
         in_discount = curr < eq
-        
         wait_reason = ""
         signal = "WAIT"
         
@@ -398,31 +384,23 @@ def process_ticker(t, app_data_dict, market_bonus):
 
         indicators = calculate_indicators(df_d)
         score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators)
-        
         is_wait = (signal == "WAIT")
         img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
         img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, sweep_type)
         cls = "b-long" if signal == "LONG" else "b-wait"
         
-        # HTML 
         elite_html = ""
         if score >= 85 or sweep_type or rvol > 1.5:
             reasons_html = "".join([f"<li style='margin-bottom:4px;'>✅ {r}</li>" for r in reasons])
             confluence_text = f"🔥 <b>策略共振：</b> {strategies} 訊號" if strategies >= 2 else ""
             sweep_text = ""
-            if sweep_type == "MAJOR":
-                sweep_text = "<div style='margin-top:10px;padding:10px;background:rgba(239,68,68,0.15);border-radius:6px;border-left:4px solid #ef4444;color:#fca5a5;font-size:0.85rem;'><b>🌊 強力獵殺 (Major Sweep)</b><br>跌破20日低點後強勢收回，機構掃盤跡象明顯。</div>"
-            elif sweep_type == "MINOR":
-                sweep_text = "<div style='margin-top:10px;padding:10px;background:rgba(251,191,36,0.15);border-radius:6px;border-left:4px solid #fbbf24;color:#fcd34d;font-size:0.85rem;'><b>💧 短線獵殺 (Minor Sweep)</b><br>跌破10日低點後收回，短線資金進場。</div>"
+            if sweep_type == "MAJOR": sweep_text = "<div style='margin-top:10px;padding:10px;background:rgba(239,68,68,0.15);border-radius:6px;border-left:4px solid #ef4444;color:#fca5a5;font-size:0.85rem;'><b>🌊 強力獵殺 (Major Sweep)</b><br>跌破20日低點後強勢收回，機構掃盤跡象明顯。</div>"
+            elif sweep_type == "MINOR": sweep_text = "<div style='margin-top:10px;padding:10px;background:rgba(251,191,36,0.15);border-radius:6px;border-left:4px solid #fbbf24;color:#fcd34d;font-size:0.85rem;'><b>💧 短線獵殺 (Minor Sweep)</b><br>跌破10日低點後收回，短線資金進場。</div>"
             elite_html = f"<div style='background:#1e293b; border:1px solid #334155; padding:15px; border-radius:12px; margin:15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'><div style='font-weight:bold; color:#10b981; font-size:1.1rem; margin-bottom:8px;'>💎 AI 戰略分析 (Score {score})</div><div style='font-size:0.9rem; color:#cbd5e1; margin-bottom:10px;'>{confluence_text}</div><ul style='margin:0; padding-left:20px; font-size:0.85rem; color:#94a3b8; line-height:1.5;'>{reasons_html}</ul>{sweep_text}</div>"
         
         stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
-
         calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
-
-        earn_html = ""
-        if earnings_warning:
-            earn_html = f"<div style='background:rgba(239,68,68,0.2); color:#fca5a5; padding:8px; border-radius:6px; font-weight:bold; margin-bottom:10px; text-align:center; border:1px solid #ef4444;'>💣 {earnings_warning}</div>"
+        earn_html = f"<div style='background:rgba(239,68,68,0.2); color:#fca5a5; padding:8px; border-radius:6px; font-weight:bold; margin-bottom:10px; text-align:center; border:1px solid #ef4444;'>💣 {earnings_warning}</div>" if earnings_warning else ""
 
         if signal == "LONG":
             ai_html = f"<div class='deploy-box long' style='border:none; padding:0;'><div class='deploy-title' style='color:#10b981; font-size:1.3rem; margin-bottom:15px;'>✅ LONG SETUP</div>{earn_html}{stats_dashboard}{elite_html}{calculator_html}<div style='background:#1e293b; padding:12px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-family:monospace; color:#cbd5e1;'><span>🔵 Entry: ${entry:.2f}</span><span style='color:#ef4444;'>🔴 SL: ${sl:.2f}</span></div></div>"
@@ -440,7 +418,7 @@ def main():
     print("🚀 啟動超級篩選器 (Priority First)...")
     weekly_news_html = get_polygon_news()
     market_status, market_text, market_bonus = get_market_condition()
-    macro_html = get_macro_data_html() 
+    macro_html = get_macro_data_html()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
     
     APP_DATA, screener_rows_list = {}, []
@@ -455,23 +433,19 @@ def main():
             processed_results.append(res)
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
-    
     send_discord_alert(processed_results)
 
     top_5_tickers = processed_results[:5]
-    
     top_5_html = ""
     rank_icons = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
     for i, item in enumerate(top_5_tickers):
         t = item['ticker']
         d = APP_DATA[t]
         rank_icon = rank_icons[i]
-        rvol_val = d['rvol']
-        fire = "🔥" if rvol_val > 1.5 else ""
+        fire = "🔥" if d['rvol'] > 1.5 else ""
         earn_icon = "💣" if processed_results[i]['earn'] else ""
         top_5_html += f"<div class='card top-card' onclick=\"openModal('{t}')\" style='border-color:#fbbf24;background:rgba(251,191,36,0.1)'><div style='font-size:1.2rem;margin-bottom:5px'>{rank_icon} {t} {earn_icon}</div><div style='font-size:0.8rem;color:#ddd'>Score <b style='color:#10b981'>{d['score']}</b> {fire}</div><div style='font-size:0.7rem;color:#94a3b8;margin-top:2px'>{item['sector']}</div></div>"
 
-    # 🔥 恢復：板塊分類顯示 🔥
     sector_groups = {}
     for item in processed_results:
         sec = item['sector']
@@ -485,21 +459,10 @@ def main():
         for item in items:
             t = item['ticker']
             d = APP_DATA[t]
-            rvol_val = d['rvol']
-            rvol_str = f"Vol {rvol_val:.1f}x"
-            rvol_html = f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
-            if rvol_val > 1.5: rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>"
-            elif rvol_val > 1.2: rvol_html = f"<span style='color:#fbbf24;font-size:0.8rem'>{rvol_str} ⚡</span>"
-            
-            if d['signal'] == 'WAIT':
-                badge_html = f"<span class='badge b-wait' style='font-size:0.65rem'>{d['wait_reason']}</span>"
-            else:
-                badge_html = "<span class='badge b-long'>LONG</span>"
-
-            earn_badge = ""
-            if item['earn']:
-                earn_badge = f"<span style='color:#ef4444;font-weight:bold;font-size:0.7rem;margin-right:5px;'>{item['earn']}</span>"
-
+            rvol_str = f"Vol {d['rvol']:.1f}x"
+            rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>" if d['rvol'] > 1.5 else f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
+            badge_html = "<span class='badge b-long'>LONG</span>" if d['signal'] == 'LONG' else f"<span class='badge b-wait' style='font-size:0.65rem'>{d['wait_reason']}</span>"
+            earn_badge = f"<span style='color:#ef4444;font-weight:bold;font-size:0.7rem;margin-right:5px;'>{item['earn']}</span>" if item['earn'] else ""
             cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>{earn_badge}<span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span></span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
