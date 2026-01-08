@@ -1,29 +1,29 @@
 {
     "2026-01-08": [
         {
-            "ticker": "TSLA",
-            "score": 70,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
-        },
-        {
-            "ticker": "AMZN",
-            "score": 70,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
-        },
-        {
             "ticker": "NVDA",
             "score": 70,
             "sector": "\u26a1 \u534a\u5c0e\u9ad4"
         },
         {
-            "ticker": "MSFT",
+            "ticker": "COIN",
             "score": 70,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
+            "sector": "\ud83c\udfe6 \u91d1\u878d\u670d\u52d9"
         },
         {
-            "ticker": "GOOGL",
+            "ticker": "MARA",
             "score": 70,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
+            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d"
+        },
+        {
+            "ticker": "INTC",
+            "score": 70,
+            "sector": "\u26a1 \u534a\u5c0e\u9ad4"
+        },
+        {
+            "ticker": "ADI",
+            "score": 70,
+            "sector": "\ud83c\udf10 \u5176\u4ed6\u7522\u696d"
         }
     ]
 }
