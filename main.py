@@ -143,7 +143,7 @@ def get_market_condition():
         else: return "NEUTRAL", "🟡 市場震盪", 0
     except: return "NEUTRAL", "Check Failed", 0
 
-# --- 4. 數據獲取 ---
+# --- 4. 數據獲取 & 財報檢查 ---
 def fetch_data_safe(ticker, period, interval):
     try:
         dat = yf.Ticker(ticker).history(period=period, interval=interval)
@@ -152,6 +152,23 @@ def fetch_data_safe(ticker, period, interval):
         dat = dat.rename(columns={"Open": "Open", "High": "High", "Low": "Low", "Close": "Close", "Volume": "Volume"})
         return dat
     except: return None
+
+# 🔥 新增：檢查財報日期 🔥
+def check_earnings(ticker):
+    try:
+        # yfinance 的 calendar 有時候會失敗，用 try-catch 包起來
+        stock = yf.Ticker(ticker)
+        calendar = stock.calendar
+        if calendar is not None and not calendar.empty:
+            # 獲取最近的財報日 (通常在 0 或 'Earnings Date' 索引)
+            earnings_date = calendar.iloc[0, 0] 
+            if isinstance(earnings_date, (datetime, pd.Timestamp)):
+                days_diff = (earnings_date.date() - datetime.now().date()).days
+                if 0 <= days_diff <= 7:
+                    return f"⚠️ Earnings: {days_diff}d"
+    except:
+        pass
+    return ""
 
 # --- 5. 技術指標 ---
 def calculate_indicators(df):
@@ -241,7 +258,7 @@ def calculate_smc(df):
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 8. 繪圖核心 ---
+# --- 8. 繪圖核心 (徹底修復白邊與文字) ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#1e293b')
@@ -264,9 +281,19 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
         mc = mpf.make_marketcolors(up='#22c55e', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#334155', 'down':'#334155'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#334155', facecolor='#1e293b')
-        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), title=dict(title=f"{ticker} - {title}", color='white', size=14, weight='bold'), figsize=(7, 4.5), panel_ratios=(7, 2), scale_width_adjustment=dict(candle=1.2), returnfig=True, tight_layout=True)
+        
+        # 🔥 修改處：調整 figsize, panel_ratios 和 padding
+        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), 
+            title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), # 字體加大
+            figsize=(8, 5), # 畫布變大
+            panel_ratios=(6, 2), 
+            scale_width_adjustment=dict(candle=1.2), 
+            returnfig=True, 
+            tight_layout=True) # 強制緊湊佈局
+        
         fig.patch.set_facecolor('#1e293b')
         ax = axlist[0]; x_min, x_max = ax.get_xlim()
+        
         for i in range(2, len(plot_df)):
             idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
@@ -283,19 +310,26 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
             lowest = plot_df['Low'].min()
             label_text = "🌊 MAJOR SWEEP" if sweep_type == "MAJOR" else "💧 MINOR SWEEP"
             label_color = "#ef4444" if sweep_type == "MAJOR" else "#fbbf24" 
-            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-8, lowest*0.98), arrowprops=dict(facecolor=label_color, shrink=0.05), color=label_color, fontsize=10, fontweight='bold', ha='center')
+            
+            # 🔥 修改處：將文字往左移動更多 (x_max - 10) 避免被切
+            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-10, lowest*0.98), 
+                        arrowprops=dict(facecolor=label_color, shrink=0.05), 
+                        color=label_color, fontsize=11, fontweight='bold', ha='center')
+        
         line_style = ':' if is_wait else '-'
         ax.axhline(tp, color='#22c55e', linestyle=line_style, linewidth=1.5, alpha=0.8)
         ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1.5, alpha=0.9)
         ax.axhline(sl, color='#ef4444', linestyle=line_style, linewidth=1.5, alpha=0.8)
-        ax.text(x_min, tp, " TP", color='#22c55e', fontsize=9, va='bottom', fontweight='bold')
-        ax.text(x_min, entry, " ENTRY", color='#3b82f6', fontsize=9, va='bottom', fontweight='bold')
-        ax.text(x_min, sl, " SL", color='#ef4444', fontsize=9, va='top', fontweight='bold')
+        ax.text(x_min+1, tp, " TP", color='#22c55e', fontsize=10, va='bottom', fontweight='bold')
+        ax.text(x_min+1, entry, " ENTRY", color='#3b82f6', fontsize=10, va='bottom', fontweight='bold')
+        ax.text(x_min+1, sl, " SL", color='#ef4444', fontsize=10, va='top', fontweight='bold')
         if not is_wait:
             ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#22c55e', alpha=0.08))
             ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.08))
+        
         buf = BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight', facecolor='#1e293b', edgecolor='none', dpi=100)
+        # 🔥 關鍵修復：bbox_inches='tight', pad_inches=0 (完全切除白邊)
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1, facecolor='#1e293b', edgecolor='none', dpi=100)
         plt.close(fig)
         buf.seek(0)
         return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
@@ -303,24 +337,17 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         print(f"Plot Error: {e}")
         return create_error_image("Plot Error")
 
-# --- 9. Discord 通知 (測試模式：門檻 Score > 0) ---
+# --- 9. Discord 通知 ---
 def send_discord_alert(results):
     if not DISCORD_WEBHOOK:
         print("⚠️ No Discord Webhook configured. Skipping alerts.")
         return
 
-    # 🔥 測試訊息：系統啟動通知
-    try:
-        print("🔔 Sending Test Message...")
-        requests.post(DISCORD_WEBHOOK, json={"content": "🔔 **Daily Dip System Started!** (Connection Test)"})
-    except Exception as e:
-        print(f"❌ Failed to send Test Message: {e}")
-
-    # 🔥 測試模式：門檻降為 0，只要有股票就發送 (用完記得改回 85)
-    top_picks = [r for r in results if r['score'] >= 0][:3]
+    # 改回正常門檻：Score >= 85
+    top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
     
     if not top_picks:
-        print("ℹ️ No setups found to alert.")
+        print("ℹ️ No high-quality setups found to alert.")
         return
 
     print(f"🚀 Sending alerts for: {[p['ticker'] for p in top_picks]}")
@@ -338,7 +365,7 @@ def send_discord_alert(results):
                 {"name": "Current", "value": f"${pick['price']:.2f}", "inline": True},
                 {"name": "Status", "value": "✅ LONG", "inline": True}
             ],
-            "footer": {"text": "Daily Dip Pro • SMC Strategy (TEST MODE)"}
+            "footer": {"text": "Daily Dip Pro • SMC Strategy"}
         }
         embeds.append(embed)
 
@@ -370,18 +397,18 @@ def process_ticker(t, app_data_dict, market_bonus):
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
         
+        # 🔥 新增：財報檢查
+        earnings_warning = check_earnings(t) 
+        
         is_bullish = curr > sma200
         in_discount = curr < eq
         
         wait_reason = ""
         signal = "WAIT"
         
-        if not is_bullish:
-            wait_reason = "📉 逆勢"
-        elif not in_discount:
-            wait_reason = "💸 溢價"
-        elif not (found_fvg or sweep_type):
-            wait_reason = "💤 無訊號"
+        if not is_bullish: wait_reason = "📉 逆勢"
+        elif not in_discount: wait_reason = "💸 溢價"
+        elif not (found_fvg or sweep_type): wait_reason = "💤 無訊號"
         else:
             signal = "LONG"
             wait_reason = ""
@@ -407,34 +434,20 @@ def process_ticker(t, app_data_dict, market_bonus):
         
         stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
 
-        calculator_html = f"""
-        <div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'>
-            <div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div>
-            <div style='display:flex; gap:10px; margin-bottom:10px;'>
-                <div style='flex:1;'>
-                    <div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div>
-                    <input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'>
-                </div>
-                <div style='flex:1;'>
-                    <div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div>
-                    <input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'>
-                </div>
-            </div>
-            <div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'>
-                <div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div>
-                <div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div>
-            </div>
-            <div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div>
-        </div>
-        """
+        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
+
+        # 🔥 財報警告 HTML 🔥
+        earn_html = ""
+        if earnings_warning:
+            earn_html = f"<div style='background:rgba(239,68,68,0.2); color:#fca5a5; padding:8px; border-radius:6px; font-weight:bold; margin-bottom:10px; text-align:center; border:1px solid #ef4444;'>💣 {earnings_warning}</div>"
 
         if signal == "LONG":
-            ai_html = f"<div class='deploy-box long' style='border:none; padding:0;'><div class='deploy-title' style='color:#10b981; font-size:1.3rem; margin-bottom:15px;'>✅ LONG SETUP</div>{stats_dashboard}{elite_html}{calculator_html}<div style='background:#1e293b; padding:12px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-family:monospace; color:#cbd5e1;'><span>🔵 Entry: ${entry:.2f}</span><span style='color:#ef4444;'>🔴 SL: ${sl:.2f}</span></div></div>"
+            ai_html = f"<div class='deploy-box long' style='border:none; padding:0;'><div class='deploy-title' style='color:#10b981; font-size:1.3rem; margin-bottom:15px;'>✅ LONG SETUP</div>{earn_html}{stats_dashboard}{elite_html}{calculator_html}<div style='background:#1e293b; padding:12px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-family:monospace; color:#cbd5e1;'><span>🔵 Entry: ${entry:.2f}</span><span style='color:#ef4444;'>🔴 SL: ${sl:.2f}</span></div></div>"
         else:
-            ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div><div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
+            ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div>{earn_html}<div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
             
         app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
-        return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}}
+        return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}, "earn": earnings_warning}
     except Exception as e:
         print(f"Err {t}: {e}")
         return None
@@ -442,11 +455,6 @@ def process_ticker(t, app_data_dict, market_bonus):
 # --- 11. 主程式 ---
 def main():
     print("🚀 啟動超級篩選器 (Priority First)...")
-    if DISCORD_WEBHOOK:
-        print(f"🔍 Discord Webhook found: {DISCORD_WEBHOOK[:10]}...")
-    else:
-        print("⚠️ No Discord Webhook environment variable found.")
-
     weekly_news_html = get_polygon_news()
     market_status, market_text, market_bonus = get_market_condition()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
@@ -461,11 +469,11 @@ def main():
         res = process_ticker(t, APP_DATA, market_bonus)
         if res:
             if res['signal'] == "LONG": screener_rows_list.append(res)
-            processed_results.append({'ticker': t, 'sector': sector, 'score': res['score'], 'signal': res['signal'], 'price': res['price'], 'data': res['data']})
+            processed_results.append({'ticker': t, 'sector': sector, 'score': res['score'], 'signal': res['signal'], 'price': res['price'], 'data': res['data'], 'earn': res['earn']})
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
     
-    # 🔥 發送 Discord 通知
+    # 發送 Discord 通知
     send_discord_alert(processed_results)
 
     top_5_tickers = processed_results[:5]
@@ -478,7 +486,11 @@ def main():
         rank_icon = rank_icons[i]
         rvol_val = d['rvol']
         fire = "🔥" if rvol_val > 1.5 else ""
-        top_5_html += f"<div class='card top-card' onclick=\"openModal('{t}')\" style='border-color:#fbbf24;background:rgba(251,191,36,0.1)'><div style='font-size:1.2rem;margin-bottom:5px'>{rank_icon} {t}</div><div style='font-size:0.8rem;color:#ddd'>Score <b style='color:#10b981'>{d['score']}</b> {fire}</div><div style='font-size:0.7rem;color:#94a3b8;margin-top:2px'>{item['sector']}</div></div>"
+        
+        # 🔥 在 Top 5 也加上財報警告小圖示
+        earn_icon = "💣" if processed_results[i]['earn'] else ""
+        
+        top_5_html += f"<div class='card top-card' onclick=\"openModal('{t}')\" style='border-color:#fbbf24;background:rgba(251,191,36,0.1)'><div style='font-size:1.2rem;margin-bottom:5px'>{rank_icon} {t} {earn_icon}</div><div style='font-size:0.8rem;color:#ddd'>Score <b style='color:#10b981'>{d['score']}</b> {fire}</div><div style='font-size:0.7rem;color:#94a3b8;margin-top:2px'>{item['sector']}</div></div>"
 
     sector_groups = {}
     for item in processed_results:
@@ -504,7 +516,12 @@ def main():
             else:
                 badge_html = "<span class='badge b-long'>LONG</span>"
 
-            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span>{rvol_html}</div></div>"
+            # 🔥 在普通卡片也加上財報警告
+            earn_badge = ""
+            if item['earn']:
+                earn_badge = f"<span style='color:#ef4444;font-weight:bold;font-size:0.7rem;margin-right:5px;'>{item['earn']}</span>"
+
+            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>{earn_badge}<span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span></span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
     json_data = json.dumps(APP_DATA)
