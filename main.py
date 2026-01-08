@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
-DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL") # 獲取 GitHub Secret
+DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
 
 # --- 1. 自動化選股核心 ---
 
@@ -303,23 +303,24 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         print(f"Plot Error: {e}")
         return create_error_image("Plot Error")
 
-# --- 9. Discord 通知功能 (新增) ---
+# --- 9. Discord 通知 (修復崩潰問題) ---
 def send_discord_alert(results):
     if not DISCORD_WEBHOOK:
-        print("⚠️ No Discord Webhook configured.")
+        print("⚠️ No Discord Webhook configured. Skipping alerts.")
         return
 
-# 👇 測試用：只要分數 >= 0 就發送 (強迫它說話)
-top_picks = [r for r in results if r['score'] >= 0][:3]
+    # 改回正常門檻：Score >= 85
+    top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
     
     if not top_picks:
-        print("ℹ️ No high-quality setups to alert.")
+        print("ℹ️ No high-quality setups found to alert.")
         return
+
+    print(f"🚀 Sending alerts for: {[p['ticker'] for p in top_picks]}")
 
     embeds = []
     for pick in top_picks:
         data = pick['data']
-        # 構建 Discord Embed
         embed = {
             "title": f"🚀 {pick['ticker']} - Potential Long Setup",
             "description": f"**Score: {pick['score']}** | Vol: {data['rvol']:.1f}x",
@@ -340,8 +341,12 @@ top_picks = [r for r in results if r['score'] >= 0][:3]
     }
 
     try:
-        requests.post(DISCORD_WEBHOOK, json=payload)
-        print("✅ Discord alert sent!")
+        resp = requests.post(DISCORD_WEBHOOK, json=payload)
+        if resp.status_code == 204:
+            print("✅ Discord alert sent successfully!")
+        else:
+            print(f"⚠️ Discord returned status code: {resp.status_code}")
+            print(resp.text)
     except Exception as e:
         print(f"❌ Failed to send Discord alert: {e}")
 
@@ -422,7 +427,6 @@ def process_ticker(t, app_data_dict, market_bonus):
             ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div><div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
             
         app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
-        # 這裡的 data 結構要傳給 discord 函數用
         return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}}
     except Exception as e:
         print(f"Err {t}: {e}")
@@ -449,7 +453,7 @@ def main():
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
     
-    # 🔥 發送 Discord 通知 (只發送符合條件的最強 3 隻)
+    # 發送 Discord 通知
     send_discord_alert(processed_results)
 
     top_5_tickers = processed_results[:5]
