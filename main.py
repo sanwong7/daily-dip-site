@@ -1,6 +1,6 @@
 import os
 import matplotlib
-# 1. 強制設定後台繪圖
+# 1. 強制設定後台繪圖，防止在伺服器上報錯
 matplotlib.use('Agg') 
 import requests
 import yfinance as yf
@@ -14,16 +14,16 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 
-# --- 0. 設定 ---
+# --- 0. 設定環境變數 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
 
-# --- 1. 自動化選股核心 ---
-
+# --- 1. 定義掃描名單 (Static Universe) ---
+# 優先掃描的熱門股
 PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "MARA", "TSM", "ASML", "ARM"]
 
+# 完整靜態名單 (包含半導體、軟體、金融、傳產等)
 STATIC_UNIVERSE = [
     "QCOM", "INTC", "MU", "AMAT", "LRCX", "ADI", "TXN", "KLAC", "MRVL", "STM", "ON", "GFS", "SMCI", "DELL", "HPQ",
     "ORCL", "ADBE", "CRM", "SAP", "INTU", "IBM", "NOW", "UBER", "ABNB", "PANW", "SNPS", "CDNS", "CRWD", "SQ", "SHOP", "WDAY", "ROP", "SNOW", "DDOG", "ZS", "NET", "TEAM", "MDB", "PATH", "U", "APP", "RDDT", "IONQ",
@@ -36,7 +36,10 @@ STATIC_UNIVERSE = [
     "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
 ]
 
+# --- 2. 輔助函數 ---
+
 def calculate_beta(stock_returns, market_returns):
+    """計算 Beta 值 (相對於大盤的波動率)"""
     if len(stock_returns) != len(market_returns):
         min_len = min(len(stock_returns), len(market_returns))
         stock_returns = stock_returns[-min_len:]
@@ -47,67 +50,86 @@ def calculate_beta(stock_returns, market_returns):
     if variance == 0: return 0
     return covariance / variance
 
-SECTOR_MAP = {
-    "Technology": "💻 科技與軟體",
-    "Communication Services": "📡 通訊與媒體",
-    "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
-    "Consumer Defensive": "🛒 必需消費 (防禦)",
-    "Financial Services": "🏦 金融服務",
-    "Healthcare": "💊 醫療保健",
-    "Energy": "🛢️ 能源",
-    "Industrials": "🏭 工業",
-    "Basic Materials": "🧱 原物料",
-    "Real Estate": "🏠 房地產",
-    "Utilities": "💡 公用事業"
-}
-
 def get_stock_sector(ticker):
+    """獲取股票板塊資訊"""
     try:
         info = yf.Ticker(ticker).info
         sector = info.get('sector', 'Unknown')
         industry = info.get('industry', 'Unknown')
+        
+        # 自定義更直觀的分類
         if "Semiconductor" in industry: return "⚡ 半導體"
+        
+        SECTOR_MAP = {
+            "Technology": "💻 科技與軟體",
+            "Communication Services": "📡 通訊與媒體",
+            "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
+            "Consumer Defensive": "🛒 必需消費 (防禦)",
+            "Financial Services": "🏦 金融服務",
+            "Healthcare": "💊 醫療保健",
+            "Energy": "🛢️ 能源",
+            "Industrials": "🏭 工業",
+            "Basic Materials": "🧱 原物料",
+            "Real Estate": "🏠 房地產",
+            "Utilities": "💡 公用事業"
+        }
         return SECTOR_MAP.get(sector, "🌐 其他產業")
     except: return "🌐 其他產業"
 
 def auto_select_candidates():
+    """篩選候選股票列表"""
     print("🚀 啟動超級篩選器 (Priority First)...")
     full_list = PRIORITY_TICKERS + list(set(STATIC_UNIVERSE) - set(PRIORITY_TICKERS))
     valid_tickers = [] 
+    
+    # 獲取大盤數據用於計算 Beta
     try:
         spy = yf.Ticker("SPY").history(period="1y")
         if spy.empty: return []
         spy_returns = spy['Close'].pct_change().dropna()
     except: return []
     
-    print(f"🔍 開始過濾...")
+    print(f"🔍 開始掃描 {len(full_list)} 隻股票...")
     for ticker in full_list:
         try:
+            # 1. 基本面過濾 (市值 > 30億)
             try:
                 info = yf.Ticker(ticker).fast_info
                 if info.market_cap < 3_000_000_000: continue
             except: pass
+            
+            # 2. 技術面數據獲取
             df = yf.Ticker(ticker).history(period="1y")
             if df is None or len(df) < 200: continue
+            
+            # 3. 趨勢過濾 (股價 > 200日均線)
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
             if close < sma200: continue 
+            
+            # 4. 流動性過濾 (成交額 > 5億美金)
             avg_vol = df['Volume'].tail(30).mean()
             avg_price = df['Close'].tail(30).mean()
             dollar_vol = avg_vol * avg_price
             if dollar_vol < 500_000_000: continue 
+            
+            # 5. 波動性過濾 (Beta > 1.0)
             stock_returns = df['Close'].pct_change().dropna()
             beta = calculate_beta(stock_returns, spy_returns)
             if beta < 1.0: continue
+            
             sector_name = get_stock_sector(ticker)
-            print(f"   ✅ {ticker} 入選! ({sector_name})")
+            # print(f"   ✅ {ticker} 入選! ({sector_name})") # 減少 log 輸出
             valid_tickers.append({'ticker': ticker, 'sector': sector_name})
         except: continue
-    print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
+    
+    print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻候選股。")
     return valid_tickers
 
-# --- 2. 新聞 ---
+# --- 3. 新聞與市場數據 ---
+
 def get_polygon_news():
+    """抓取 Polygon 新聞"""
     if not API_KEY: return "<div style='padding:20px'>API Key Missing</div>"
     news_html = ""
     try:
@@ -125,47 +147,54 @@ def get_polygon_news():
     except Exception as e: news_html = f"<div style='padding:20px'>News Error: {e}</div>"
     return news_html
 
-# --- 3. 市場大盤分析 & 🔥 新增：宏觀數據 ---
 def get_market_condition():
+    """判斷大盤多空狀態"""
     try:
         print("🔍 Checking Market...")
         spy = yf.Ticker("SPY").history(period="6mo")
         qqq = yf.Ticker("QQQ").history(period="6mo")
         if spy.empty or qqq.empty: return "NEUTRAL", "數據不足", 0
+        
         spy_50 = spy['Close'].rolling(50).mean().iloc[-1]
         spy_curr = spy['Close'].iloc[-1]
         qqq_50 = qqq['Close'].rolling(50).mean().iloc[-1]
         qqq_curr = qqq['Close'].iloc[-1]
+        
         is_bullish = (spy_curr > spy_50) and (qqq_curr > qqq_50)
         is_bearish = (spy_curr < spy_50) and (qqq_curr < qqq_50)
+        
         if is_bullish: return "BULLISH", "🟢 市場順風 (大盤 > 50MA)", 5
         elif is_bearish: return "BEARISH", "🔴 市場逆風 (大盤 < 50MA)", -10
         else: return "NEUTRAL", "🟡 市場震盪", 0
     except: return "NEUTRAL", "Check Failed", 0
 
 def get_macro_data():
-    """抓取宏觀經濟數據: VIX, BTC, DXY, 10Y Yield"""
+    """🔥 抓取宏觀經濟數據: VIX, BTC, DXY, 10Y Yield"""
     macro_html = ""
+    print("🔍 Fetching Macro Data...")
     try:
+        # 使用更穩定的 Ticker
         tickers = {
-            "VIX": "^VIX",
-            "BTC": "BTC-USD",
-            "DXY": "DX-Y.NYB",
-            "US10Y": "^TNX"
+            "VIX (Fear)": "^VIX",
+            "BTC (Risk)": "BTC-USD",
+            "USD (DXY)": "DX-Y.NYB", 
+            "10Y Yield": "^TNX"
         }
         
         cards = ""
         for name, symbol in tickers.items():
             try:
-                data = yf.Ticker(symbol).history(period="2d")
+                # 嘗試使用 history 來獲取數據 (比 fast_info 穩定)
+                ticker_obj = yf.Ticker(symbol)
+                data = ticker_obj.history(period="5d") # 抓多一點天數以防假日
+                
                 if len(data) >= 2:
                     curr = data['Close'].iloc[-1]
                     prev = data['Close'].iloc[-2]
                     change = ((curr - prev) / prev) * 100
                     
+                    # 顏色邏輯：這裡統一用 綠漲 紅跌
                     color = "#22c55e" if change >= 0 else "#ef4444"
-                    # 對於 VIX 和 DXY，上漲通常對股市是壞事，雖然這裡保持綠漲紅跌的一致性，
-                    # 但投資者自己知道解讀。
                     
                     cards += f"""
                     <div class='macro-card'>
@@ -174,128 +203,184 @@ def get_macro_data():
                         <div class='macro-change' style='color:{color}'>{change:+.2f}%</div>
                     </div>
                     """
-            except: continue
+                    print(f"   ✅ {name}: {curr:.2f}")
+                else:
+                    print(f"   ⚠️ {name}: No Data")
+            except Exception as e: 
+                print(f"   ❌ Failed {name}: {e}")
+                continue
             
         if cards:
             macro_html = f"<div class='macro-grid'>{cards}</div>"
+        else:
+            macro_html = "<div style='text-align:center; color:#666;'>Macro Data Unavailable</div>"
             
     except Exception as e:
         print(f"Macro Data Error: {e}")
     
     return macro_html
 
-# --- 4. 數據獲取 & 財報檢查 ---
+# --- 4. 數據處理核心 ---
+
 def fetch_data_safe(ticker, period, interval):
+    """安全獲取股票 K 線數據"""
     try:
         dat = yf.Ticker(ticker).history(period=period, interval=interval)
         if dat is None or dat.empty: return None
         if not isinstance(dat.index, pd.DatetimeIndex): dat.index = pd.to_datetime(dat.index)
+        # 統一欄位名稱
         dat = dat.rename(columns={"Open": "Open", "High": "High", "Low": "Low", "Close": "Close", "Volume": "Volume"})
         return dat
     except: return None
 
 def check_earnings(ticker):
+    """🔥 檢查近期是否有財報"""
     try:
         stock = yf.Ticker(ticker)
+        # 嘗試獲取行事曆
         calendar = stock.calendar
         if calendar is not None and not calendar.empty:
-            earnings_date = calendar.iloc[0, 0] 
+            # 處理不同版本的 yfinance 返回格式
+            if isinstance(calendar, dict):
+                dates = calendar.get('Earnings Date', [])
+                if dates: earnings_date = dates[0]
+            else:
+                # DataFrame 格式
+                earnings_date = calendar.iloc[0, 0]
+            
             if isinstance(earnings_date, (datetime, pd.Timestamp)):
+                # 計算距離今天幾天
                 days_diff = (earnings_date.date() - datetime.now().date()).days
                 if 0 <= days_diff <= 7:
                     return f"⚠️ Earnings: {days_diff}d"
     except: pass
     return ""
 
-# --- 5. 技術指標 ---
 def calculate_indicators(df):
+    """計算技術指標：RSI, RVOL, Golden Cross"""
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
+    
     vol_ma = df['Volume'].rolling(10).mean()
     rvol = df['Volume'] / vol_ma
+    
     sma50 = df['Close'].rolling(50).mean()
     sma200 = df['Close'].rolling(200).mean()
+    
     golden_cross = False
     if len(sma50) > 5:
         if sma50.iloc[-1] > sma200.iloc[-1] and sma50.iloc[-5] <= sma200.iloc[-5]:
             golden_cross = True
+            
     trend_bullish = sma50.iloc[-1] > sma200.iloc[-1] if len(sma200) > 0 else False
+    
     if len(df) > 30:
         perf_30d = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30] * 100
     else: perf_30d = 0
+    
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
-# --- 6. 評分系統 ---
 def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators):
+    """🔥 核心評分邏輯 (無上限版)"""
     try:
         score = 60 + market_bonus
         reasons = []
         rsi, rvol, golden_cross, trend, perf_30d = indicators
         strategies = 0
+        
+        # 1. 策略加分
         if sweep_type == "MAJOR":
             strategies += 1; score += 25; reasons.append("🌊 強力獵殺 (Major Sweep >20d)")
         elif sweep_type == "MINOR":
             strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep >10d)")
+        
         if golden_cross: strategies += 1
-        if 40 <= rsi.iloc[-1] <= 55: strategies += 1
+        
+        # 2. RSI 判斷
+        curr_rsi = rsi.iloc[-1]
+        if 40 <= curr_rsi <= 55: 
+            score += 10; strategies += 1; reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
+        elif curr_rsi > 70: 
+            score -= 15 # 過熱扣分
+            
+        # 3. 盈虧比判斷
         risk = entry - sl
         reward = tp - entry
         rr = reward / risk if risk > 0 else 0
         if rr >= 3.0: score += 15; reasons.append(f"💰 盈虧比極佳 ({rr:.1f}R)")
         elif rr >= 2.0: score += 10; reasons.append(f"💰 盈虧比優秀 ({rr:.1f}R)")
-        curr_rsi = rsi.iloc[-1]
-        if 40 <= curr_rsi <= 55: score += 10; reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
-        elif curr_rsi > 70: score -= 15
+        
+        # 4. 成交量判斷
         curr_rvol = rvol.iloc[-1]
         if curr_rvol > 1.5: score += 10; reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
         elif curr_rvol > 1.1: score += 5
+        
+        # 5. 其他加分
         if sweep_type: score += 20; reasons.append("💧 觸發流動性獵殺 (Sweep)")
         if golden_cross: score += 10; reasons.append("✨ 出現黃金交叉")
+        
         dist_pct = abs(df['Close'].iloc[-1] - entry) / entry
         if dist_pct < 0.01: score += 15; reasons.append("🎯 狙擊入場區")
+        
         if trend: score += 5; reasons.append("📈 長期趨勢向上")
+        
         if market_bonus > 0: reasons.append("🌍 大盤順風車 (+5)")
         if market_bonus < 0: reasons.append("🌪️ 逆大盤風險 (-10)")
+        
+        # 分數無上限，最低 0
         return max(int(score), 0), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
 
-# --- 7. SMC 運算 ---
 def calculate_smc(df):
+    """計算 SMC 關鍵點位：Sweep, FVG, EQ"""
     try:
         window = 50
         recent = df.tail(window)
+        
+        # Buy Side / Sell Side Liquidity
         bsl = float(recent['High'].max())
         ssl_long = float(recent['Low'].min())
+        
+        # Equilibrium (平衡點)
         eq = (bsl + ssl_long) / 2
+        
         best_entry = eq
         found_fvg = False
         sweep_type = None 
+        
+        # 檢查 Sweep (最近 3 根 K 線有沒有跌破之前的低點後收回)
         last_3 = recent.tail(3)
         prior_data = recent.iloc[:-3]
+        
         low_10d = prior_data['Low'].tail(10).min()
         low_20d = prior_data['Low'].tail(20).min()
+        
         for i in range(len(last_3)):
             candle = last_3.iloc[i]
             if candle['Low'] < low_20d and candle['Close'] > low_20d:
                 sweep_type = "MAJOR"; best_entry = low_20d; break 
             elif candle['Low'] < low_10d and candle['Close'] > low_10d:
                 if sweep_type != "MAJOR": sweep_type = "MINOR"; best_entry = low_10d
+                
+        # 檢查 FVG (價值缺口)
         for i in range(2, len(recent)):
-            if recent['Low'].iloc[i] > recent['High'].iloc[i-2]:
+            if recent['Low'].iloc[i] > recent['High'].iloc[i-2]: # 發現缺口
                 fvg = float(recent['Low'].iloc[i])
-                if fvg < eq:
+                if fvg < eq: # 只看折價區的 FVG
                     if not sweep_type: best_entry = fvg
                     found_fvg = True
                     break
+                    
         return bsl, ssl_long, eq, best_entry, ssl_long*0.99, found_fvg, sweep_type
     except:
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 8. 繪圖核心 ---
+# --- 5. 繪圖核心 (修復版) ---
+
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#1e293b')
@@ -309,46 +394,80 @@ def create_error_image(msg):
     return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
 
 def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
+    """生成漂亮的 K 線圖，修復白邊和文字遮擋"""
     try:
         plt.close('all')
         if df is None or len(df) < 5: return create_error_image("No Data")
+        
         plot_df = df.tail(80).copy()
+        
         entry = float(entry) if not np.isnan(entry) else plot_df['Close'].iloc[-1]
         sl = float(sl) if not np.isnan(sl) else plot_df['Low'].min()
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
+        
+        # 配色方案
         mc = mpf.make_marketcolors(up='#22c55e', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#334155', 'down':'#334155'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#334155', facecolor='#1e293b')
-        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), figsize=(8, 5), panel_ratios=(6, 2), scale_width_adjustment=dict(candle=1.2), returnfig=True, tight_layout=True)
+        
+        # 🔥 修改處：加寬畫布，開啟 tight_layout
+        fig, axlist = mpf.plot(
+            plot_df, 
+            type='candle', 
+            style=s, 
+            volume=True, 
+            mav=(50, 200), 
+            title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), 
+            figsize=(9, 5.5), # 更寬
+            panel_ratios=(6, 2), 
+            scale_width_adjustment=dict(candle=1.2), 
+            returnfig=True, 
+            tight_layout=True
+        )
+        
         fig.patch.set_facecolor('#1e293b')
         ax = axlist[0]; x_min, x_max = ax.get_xlim()
+        
+        # 繪製 FVG 方塊
         for i in range(2, len(plot_df)):
-            idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
                 bot, top = plot_df['High'].iloc[i-2], plot_df['Low'].iloc[i]
                 if (top - bot) > (plot_df['Close'].mean() * 0.002):
-                    rect = patches.Rectangle((idx-0.4, bot), 10, top - bot, linewidth=0, facecolor='#22c55e', alpha=0.2)
+                    rect = patches.Rectangle((i-1.4, bot), 10, top - bot, linewidth=0, facecolor='#22c55e', alpha=0.2)
                     ax.add_patch(rect)
             elif plot_df['High'].iloc[i] < plot_df['Low'].iloc[i-2]:
                 bot, top = plot_df['High'].iloc[i], plot_df['Low'].iloc[i-2]
                 if (top - bot) > (plot_df['Close'].mean() * 0.002):
-                    rect = patches.Rectangle((idx-0.4, bot), 10, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.2)
+                    rect = patches.Rectangle((i-1.4, bot), 10, top - bot, linewidth=0, facecolor='#ef4444', alpha=0.2)
                     ax.add_patch(rect)
+                    
+        # 標記 Sweep
         if sweep_type:
             lowest = plot_df['Low'].min()
             label_text = "🌊 MAJOR SWEEP" if sweep_type == "MAJOR" else "💧 MINOR SWEEP"
             label_color = "#ef4444" if sweep_type == "MAJOR" else "#fbbf24" 
-            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-10, lowest*0.98), arrowprops=dict(facecolor=label_color, shrink=0.05), color=label_color, fontsize=11, fontweight='bold', ha='center')
+            
+            # 🔥 修改處：文字位置左移，避免被切
+            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-15, lowest*0.98), 
+                        arrowprops=dict(facecolor=label_color, shrink=0.05), 
+                        color=label_color, fontsize=12, fontweight='bold', ha='center')
+        
+        # 繪製交易線
         line_style = ':' if is_wait else '-'
         ax.axhline(tp, color='#22c55e', linestyle=line_style, linewidth=1.5, alpha=0.8)
         ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1.5, alpha=0.9)
         ax.axhline(sl, color='#ef4444', linestyle=line_style, linewidth=1.5, alpha=0.8)
+        
+        # 文字標籤
         ax.text(x_min+1, tp, " TP", color='#22c55e', fontsize=10, va='bottom', fontweight='bold')
         ax.text(x_min+1, entry, " ENTRY", color='#3b82f6', fontsize=10, va='bottom', fontweight='bold')
         ax.text(x_min+1, sl, " SL", color='#ef4444', fontsize=10, va='top', fontweight='bold')
+        
         if not is_wait:
             ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#22c55e', alpha=0.08))
             ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.08))
+        
         buf = BytesIO()
+        # 🔥 修改處：pad_inches=0.1 避免完全貼邊
         fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1, facecolor='#1e293b', edgecolor='none', dpi=100)
         plt.close(fig)
         buf.seek(0)
@@ -363,6 +482,7 @@ def send_discord_alert(results):
         print("⚠️ No Discord Webhook configured. Skipping alerts.")
         return
 
+    # 門檻：Score >= 85 且 LONG
     top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
     
     if not top_picks:
@@ -374,9 +494,12 @@ def send_discord_alert(results):
     embeds = []
     for pick in top_picks:
         data = pick['data']
+        # 加入財報警告圖示
+        earn_warning = "💣 " + pick['earn'] if pick['earn'] else ""
+        
         embed = {
-            "title": f"🚀 {pick['ticker']} - Potential Long Setup",
-            "description": f"**Score: {pick['score']}** | Vol: {data['rvol']:.1f}x",
+            "title": f"🚀 {pick['ticker']} - Potential Long Setup {earn_warning}",
+            "description": f"**Score: {pick['score']}** | Vol: {data['rvol']:.1f}x\n{pick['earn']}",
             "color": 5763717, # Green
             "fields": [
                 {"name": "Entry", "value": f"${data['entry']:.2f}", "inline": True},
@@ -398,21 +521,22 @@ def send_discord_alert(results):
         if resp.status_code == 204:
             print("✅ Discord alert sent successfully!")
         else:
-            print(f"⚠️ Discord returned status code: {resp.status_code}")
-            print(resp.text)
+            print(f"⚠️ Discord Error: {resp.status_code}")
     except Exception as e:
         print(f"❌ Failed to send Discord alert: {e}")
 
-# --- 10. 單一股票處理 ---
+# --- 10. 主處理邏輯 ---
 def process_ticker(t, app_data_dict, market_bonus):
     try:
         df_d = fetch_data_safe(t, "1y", "1d")
         if df_d is None or len(df_d) < 50: return None
         df_h = fetch_data_safe(t, "1mo", "1h")
         if df_h is None or df_h.empty: df_h = df_d
+        
         curr = float(df_d['Close'].iloc[-1])
         sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
         if pd.isna(sma200): sma200 = curr
+        
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
         
@@ -439,6 +563,7 @@ def process_ticker(t, app_data_dict, market_bonus):
         img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, sweep_type)
         cls = "b-long" if signal == "LONG" else "b-wait"
         
+        # HTML 生成
         elite_html = ""
         if score >= 85 or sweep_type or rvol > 1.5:
             reasons_html = "".join([f"<li style='margin-bottom:4px;'>✅ {r}</li>" for r in reasons])
@@ -469,19 +594,21 @@ def process_ticker(t, app_data_dict, market_bonus):
         print(f"Err {t}: {e}")
         return None
 
-# --- 11. 主程式 ---
+# --- 12. 程式入口 ---
 def main():
-    print("🚀 啟動超級篩選器 (Priority First)...")
+    print("🚀 啟動 Daily Dip Pro (All-in-One)...")
+    
+    # 1. 獲取外部數據
     weekly_news_html = get_polygon_news()
     market_status, market_text, market_bonus = get_market_condition()
-    macro_html = get_macro_data() # 🔥 獲取宏觀數據
-    
+    macro_html = get_macro_data()
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
     
     APP_DATA, screener_rows_list = {}, []
     candidates_data = auto_select_candidates()
     processed_results = []
     
+    # 2. 處理每一隻股票
     for item in candidates_data:
         t = item['ticker']
         sector = item['sector']
@@ -492,11 +619,11 @@ def main():
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
     
-    # 發送 Discord 通知
+    # 3. 發送 Discord 通知
     send_discord_alert(processed_results)
 
+    # 4. 生成 HTML
     top_5_tickers = processed_results[:5]
-    
     top_5_html = ""
     rank_icons = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
     for i, item in enumerate(top_5_tickers):
@@ -552,7 +679,7 @@ def main():
 
     .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} 
     
-    /* 🔥 宏觀數據樣式 🔥 */
+    /* 宏觀儀表板樣式 */
     .macro-grid {{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:15px; }}
     .macro-card {{ background:rgba(30,41,59,0.7); border:1px solid #334155; border-radius:8px; padding:10px; text-align:center; }}
     .macro-title {{ font-size:0.8rem; color:#94a3b8; font-weight:bold; }}
@@ -573,6 +700,7 @@ def main():
       }}
       </script>
     </div>
+
     <div class="market-bar" style="border-left:4px solid {market_color}"><div>{ "🟢" if market_status=="BULLISH" else "🔴" }</div><div><b>Market: {market_status}</b><div style="font-size:0.8rem;color:#94a3b8">{market_text}</div></div></div>
     
     {macro_html}
@@ -596,7 +724,7 @@ def main():
           }}
           </script>
         </div>
-        </div>
+    </div>
 
     <div id="news" class="content">{weekly_news_html}</div>
     <div style="text-align:center;color:#666;margin-top:30px;font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
