@@ -63,46 +63,32 @@ def generate_ticker_grid(picks, title, color_class="top-card"):
     html += "</div>"
     return html
 
-# --- 核心數據獲取 (批量) ---
+# --- 核心數據獲取 ---
 def fetch_all_data():
     print("🚀 啟動批量下載引擎...")
     try:
-        # 下載 Daily 數據
         data = yf.download(ALL_TICKERS, period="1y", group_by='ticker', auto_adjust=True, threads=True)
         return data
     except Exception as e:
         print(f"❌ Bulk download failed: {e}")
         return None
 
-# 🔥 優化 B：獲取 1小時 數據確認 MSS (只針對候選股)
 def check_hourly_mss(ticker):
     try:
-        # 只抓最近 5 天的 1h K線
         df_h = yf.download(ticker, period="5d", interval="1h", progress=False, auto_adjust=True)
         if df_h is None or len(df_h) < 5: return False
-        
-        # 簡單 MSS 邏輯：最後一根 K 線的收盤價 > 前一根 K 線的最高價 (或前一個明顯高點)
-        # 這裡採用動能判斷：最近 2 根 K 線是否有強勢反彈
         last_close = df_h['Close'].iloc[-1]
         prev_high = df_h['High'].iloc[-2]
-        
         return last_close > prev_high
     except: return False
 
 # --- 技術指標計算 ---
 def calculate_atr(df, period=14):
-    """🔥 優化 A：計算 ATR (平均真實波幅) 用於止損"""
     high = df['High']
     low = df['Low']
     close = df['Close'].shift(1)
-    
-    tr1 = high - low
-    tr2 = (high - close).abs()
-    tr3 = (low - close).abs()
-    
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window=period).mean()
-    return atr
+    tr = pd.concat([high - low, (high - close).abs(), (low - close).abs()], axis=1).max(axis=1)
+    return tr.rolling(window=period).mean()
 
 def get_stock_sector(ticker):
     if ticker == "SPY": return "Market"
@@ -111,21 +97,17 @@ def get_stock_sector(ticker):
     if ticker in ["JPM", "BAC", "WFC", "GS", "MS", "V", "MA", "BLK", "COIN", "HOOD"]: return "🏦 金融服務"
     return "🌐 其他產業"
 
-# --- 核心策略運算 (SMC + ATR + VSA) ---
+# --- 核心策略運算 ---
 def calculate_smc_strategy(df, ticker):
     try:
         if len(df) < 50: return None
-        
-        # 基礎數據
-        atr = calculate_atr(df).iloc[-1] # 獲取最新 ATR
+        atr = calculate_atr(df).iloc[-1]
         close = df['Close'].iloc[-1]
         low_50d = df['Low'].tail(50).min()
         high_50d = df['High'].tail(50).max()
-        bsl = high_50d # 止盈目標 (上方流動性)
+        bsl = high_50d
         
-        # --- 1. 判斷 Sweep (獵殺) ---
-        # 邏輯：今天的低點刺破了過去 10 天的低點，但收盤收上去了
-        low_10d = df['Low'].tail(11).iloc[:-1].min() # 不包含今天的過去10天最低
+        low_10d = df['Low'].tail(11).iloc[:-1].min()
         today_low = df['Low'].iloc[-1]
         today_close = df['Close'].iloc[-1]
         
@@ -136,61 +118,64 @@ def calculate_smc_strategy(df, ticker):
             is_sweep = True
             sweep_type = "MAJOR" if today_low <= low_50d else "MINOR"
         
-        # --- 2. 優化 A: ATR 止損計算 ---
-        # 舊邏輯：sl = low_50d * 0.99 (太寬)
-        # 新邏輯：sl = Sweep Candle Low - 1 * ATR (精確)
         if is_sweep:
             sl = today_low - (1.0 * atr)
-            best_entry = today_close # 假設收盤價進場
+            best_entry = today_close
         else:
-            # 如果沒有 Sweep，用傳統折價區邏輯
             sl = low_50d * 0.99
             best_entry = (high_50d + low_50d) / 2
             
-        # 確保 SL 合理
         if sl >= best_entry: sl = best_entry * 0.95
-
         return bsl, sl, best_entry, is_sweep, sweep_type
-    except Exception as e:
-        return None
+    except Exception as e: return None
 
-def calculate_score_v2(df, is_sweep, sweep_type, is_bullish, ticker):
-    """🔥 優化 C：包含 VSA 量價分析的評分系統"""
-    score = 60
+def calculate_score_refined(df, is_sweep, sweep_type, is_bullish, ticker):
+    """🔥 優化後的細膩評分系統 🔥"""
+    score = 50 # 基礎分降低，讓加分項目更有感
     
-    # 1. 趨勢加分
-    if is_bullish: score += 10
+    # 1. 趨勢加分 (Trend)
+    sma200 = df['Close'].rolling(200).mean().iloc[-1]
+    curr = df['Close'].iloc[-1]
+    if curr > sma200:
+        score += 5
+        # 如果站穩 200MA 之上超過 5%，趨勢更強
+        if curr > sma200 * 1.05: score += 5
     
-    # 2. Sweep 加分 (最重要)
+    if is_bullish: score += 5
+    
+    # 2. 策略加分 (Strategy)
     if is_sweep:
-        score += 25
-        if sweep_type == "MAJOR": score += 10 # 破50天低點更強
+        score += 20
+        if sweep_type == "MAJOR": score += 10
         
-    # 3. 🔥 優化 C: VSA 成交量分析 (恐慌殺盤檢查)
-    # 檢查：今天是否爆量？(比過去 5 天均量大 1.5 倍)
+    # 3. 量能分析 (Volume)
     vol_ma5 = df['Volume'].iloc[-6:-1].mean()
     today_vol = df['Volume'].iloc[-1]
     
     if vol_ma5 > 0:
         rvol = today_vol / vol_ma5
-        if rvol > 1.5: 
-            score += 15 # 爆量收針 = 機構進場鐵證
-        elif rvol < 0.8:
-            score -= 10 # 無量下跌 = 沒人接盤，危險
-    else:
-        rvol = 1.0
+        if rvol > 1.5: score += 10
+        elif rvol > 1.2: score += 5 # 溫和放量也有分
+        elif rvol < 0.8: score -= 5
+    else: rvol = 1.0
 
-    # 4. RSI 超賣反彈
+    # 4. RSI 細膩區間
     rsi = calculate_rsi(df).iloc[-1]
-    if 30 <= rsi <= 50: score += 10 # 黃金反彈區
+    if 30 <= rsi <= 40: score += 15 # 超賣反彈區 (最強)
+    elif 40 < rsi <= 50: score += 10 # 健康回調區
+    elif 50 < rsi <= 60: score += 5  # 強勢整理區
+    elif rsi > 70: score -= 10       # 過熱
     
-    # 5. 🔥 優化 B: 1小時 MSS 確認 (二次請求)
-    # 如果分數已經不錯 (>80)，我們去查 1小時圖來做最後確認
+    # 5. 短期動能 (Momentum)
+    # 檢查過去 3 天是否漲多跌少
+    recent_change = (curr - df['Close'].iloc[-4]) / df['Close'].iloc[-4]
+    if recent_change > 0: score += 5
+    
+    # 6. 小週期確認 (Hourly MSS)
     hourly_confirmed = False
-    if score >= 80:
-        # print(f"🔎 Checking Hourly MSS for {ticker}...")
+    if score >= 75: # 門檻稍微降低
         if check_hourly_mss(ticker):
-            score += 15
+            score += 10
             hourly_confirmed = True
     
     return int(score), rvol, hourly_confirmed
@@ -210,29 +195,21 @@ def generate_chart(df, ticker, title, entry, sl, tp):
         fig, ax = plt.subplots(figsize=(8, 5))
         fig.patch.set_facecolor('#1e293b')
         ax.set_facecolor('#1e293b')
-        
         up = plot_df[plot_df.Close >= plot_df.Open]
         down = plot_df[plot_df.Close < plot_df.Open]
         col1 = '#22c55e'
         col2 = '#ef4444'
-        
         ax.vlines(plot_df.index, plot_df.Low, plot_df.High, color='white', linewidth=1)
         ax.vlines(up.index, up.Open, up.Close, color=col1, linewidth=4)
         ax.vlines(down.index, down.Open, down.Close, color=col2, linewidth=4)
-        
-        # 畫 SL (ATR 優化版)
         ax.axhline(tp, color=col1, linestyle='--', label='TP')
         ax.axhline(entry, color='#3b82f6', linestyle='-', label='Entry')
         ax.axhline(sl, color=col2, linestyle='--', label='SL (ATR)')
-        
-        # 標註最新價格
         ax.text(plot_df.index[-1], entry, f" {entry:.2f}", color='#3b82f6', fontsize=10, va='center')
         ax.text(plot_df.index[-1], sl, f" {sl:.2f}", color=col2, fontsize=10, va='center')
-
         ax.set_title(f"{ticker} - {title}", color='white', fontweight='bold')
         ax.tick_params(axis='x', colors='white', rotation=45)
         ax.tick_params(axis='y', colors='white')
-        
         buf = BytesIO()
         fig.savefig(buf, format='png', bbox_inches='tight', facecolor='#1e293b')
         plt.close(fig)
@@ -263,9 +240,7 @@ def get_macro_html():
 
 def main():
     data = fetch_all_data()
-    if data is None or data.empty:
-        print("❌ Critical Error: No data fetched.")
-        return
+    if data is None or data.empty: return
 
     try:
         spy_df = data['SPY']
@@ -286,21 +261,17 @@ def main():
             df = data[ticker].dropna()
             if len(df) < 50: continue
             
-            # 1. 執行新策略運算 (含 ATR 止損)
             strat = calculate_smc_strategy(df, ticker)
             if not strat: continue
             bsl, sl, entry, is_sweep, sweep_type = strat
             
-            # 2. 評分 (含 VSA 和 Hourly MSS)
-            score, rvol, mss_confirmed = calculate_score_v2(df, is_sweep, sweep_type, market_status=="BULLISH", ticker)
-            
-            # 3. 決定訊號
+            # 🔥 使用新的評分函數 (Refined)
+            score, rvol, mss_confirmed = calculate_score_refined(df, is_sweep, sweep_type, market_status=="BULLISH", ticker)
             signal = "LONG" if score >= 75 else "WAIT"
             
-            # 4. 繪圖
-            chart_title = "Daily Chart + ATR SL"
-            if mss_confirmed: chart_title += " + 1h MSS ✅"
-            img = generate_chart(df, ticker, chart_title, entry, sl, bsl)
+            title = f"{ticker} (Score: {score})"
+            if mss_confirmed: title += " 1h MSS"
+            img = generate_chart(df, ticker, title, entry, sl, bsl)
             
             res = {
                 "ticker": ticker,
@@ -308,17 +279,17 @@ def main():
                 "score": score,
                 "signal": signal,
                 "rvol": rvol,
-                "data": {"entry": entry, "sl": sl}, # 這裡的 sl 已經是 ATR 優化過的了
+                "data": {"entry": entry, "sl": sl}, 
                 "img": img,
                 "mss": mss_confirmed
             }
             results.append(res)
             app_data[ticker] = res
-        except Exception as e: continue
+        except: continue
 
     results.sort(key=lambda x: x['score'], reverse=True)
     
-    # --- 歷史數據邏輯 ---
+    # 歷史紀錄
     history = load_history()
     today_str = datetime.now().strftime('%Y-%m-%d')
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -332,9 +303,8 @@ def main():
 
     yesterday_picks = history.get(yesterday_str, [])
     day_before_picks = history.get(day_before_str, [])
-    # ------------------
 
-    # Discord 通知 (只發最強的)
+    # Discord
     if DISCORD_WEBHOOK and results:
         top = [r for r in results if r['score'] >= 85][:3]
         if top:
@@ -345,11 +315,10 @@ def main():
             try: requests.post(DISCORD_WEBHOOK, json={"username": "Daily Dip Bot", "embeds": embeds})
             except: pass
 
-    # HTML 生成
+    # HTML
     macro_html = get_macro_html()
     news_html = get_polygon_news()
-    
-    today_html = generate_ticker_grid(results[:5], "🏆 Today's Top 5 (AI + VSA)")
+    today_html = generate_ticker_grid(results[:5], "🏆 Today's Top 5 (Refined Score)")
     yesterday_html = generate_ticker_grid(yesterday_picks, f"🥈 Yesterday ({yesterday_str})", "top-card")
     day_before_html = generate_ticker_grid(day_before_picks, f"🥉 Day Before ({day_before_str})", "top-card")
 
@@ -368,13 +337,10 @@ def main():
             d = app_data[t]
             rvol_html = f"<span style='color:#f472b6;font-size:0.8rem'>Vol {d['rvol']:.1f}x 🔥</span>" if d['rvol'] > 1.5 else f"<span style='color:#64748b;font-size:0.75rem'>Vol {d['rvol']:.1f}x</span>"
             badge_html = "<span class='badge long'>LONG</span>" if d['signal'] == 'LONG' else "<span class='badge wait'>WAIT</span>"
-            mss_badge = "⚡" if d['mss'] else ""
-            
-            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t} {mss_badge}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>Score: {d['score']}</span>{rvol_html}</div></div>"
+            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>Score: {d['score']}</span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
     json_str = json.dumps(app_data)
-    
     final_html = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -403,20 +369,15 @@ def main():
     <div style="margin-bottom:15px; border-left: 4px solid {market_color}; background: #1e293b; padding: 10px;">
         <b>Market: {market_status}</b>
     </div>
-
     {macro_html}
-
     {today_html}
     {yesterday_html}
     {day_before_html}
-
     <div class="tabs" style="margin-top:40px; border-bottom:1px solid #333; padding-bottom:5px; font-weight:bold; color:#fbbf24;">📊 Watchlist by Sector</div>
     {sector_html_blocks}
-
     <h3>📰 News</h3>
     <div>{news_html}</div>
     <div style="text-align:center; color:#666; margin-top:30px; font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
-
     <div id="modal" class="modal" onclick="this.style.display='none'">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h2 id="m-title"></h2>
@@ -432,7 +393,6 @@ def main():
             <button onclick="document.getElementById('modal').style.display='none'" style="width:100%; padding:15px; margin-top:20px; background:#3b82f6; color:white; border:none; border-radius:8px;">Close</button>
         </div>
     </div>
-
     <script>
         const DATA = {json_str};
         let current = null;
