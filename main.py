@@ -89,17 +89,9 @@ def calculate_beta(stock_returns, market_returns):
     return covariance / variance
 
 SECTOR_MAP = {
-    "Technology": "💻 科技與軟體",
-    "Communication Services": "📡 通訊與媒體",
-    "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
-    "Consumer Defensive": "🛒 必需消費 (防禦)",
-    "Financial Services": "🏦 金融服務",
-    "Healthcare": "💊 醫療保健",
-    "Energy": "🛢️ 能源",
-    "Industrials": "🏭 工業",
-    "Basic Materials": "🧱 原物料",
-    "Real Estate": "🏠 房地產",
-    "Utilities": "💡 公用事業"
+    "Technology": "💻 科技與軟體", "Communication Services": "📡 通訊與媒體", "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
+    "Consumer Defensive": "🛒 必需消費 (防禦)", "Financial Services": "🏦 金融服務", "Healthcare": "💊 醫療保健",
+    "Energy": "🛢️ 能源", "Industrials": "🏭 工業", "Basic Materials": "🧱 原物料", "Real Estate": "🏠 房地產", "Utilities": "💡 公用事業"
 }
 
 def get_stock_sector(ticker):
@@ -197,11 +189,9 @@ def fetch_data_safe(ticker, period, interval):
 # 🔥 新增：檢查財報日期 🔥
 def check_earnings(ticker):
     try:
-        # yfinance 的 calendar 有時候會失敗，用 try-catch 包起來
         stock = yf.Ticker(ticker)
         calendar = stock.calendar
         if calendar is not None and not calendar.empty:
-            # 獲取最近的財報日 (通常在 0 或 'Earnings Date' 索引)
             earnings_date = calendar.iloc[0, 0] 
             if isinstance(earnings_date, (datetime, pd.Timestamp)):
                 days_diff = (earnings_date.date() - datetime.now().date()).days
@@ -232,37 +222,65 @@ def calculate_indicators(df):
     else: perf_30d = 0
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
-# --- 6. 評分系統 ---
+# --- 6. 評分系統 (🔥 實作 C 項優化) ---
 def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators):
     try:
         score = 60 + market_bonus
         reasons = []
         rsi, rvol, golden_cross, trend, perf_30d = indicators
         strategies = 0
+        
+        # 1. 策略加分
         if sweep_type == "MAJOR":
             strategies += 1; score += 25; reasons.append("🌊 強力獵殺 (Major Sweep >20d)")
         elif sweep_type == "MINOR":
             strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep >10d)")
+            
         if golden_cross: strategies += 1
         if 40 <= rsi.iloc[-1] <= 55: strategies += 1
+        
         risk = entry - sl
         reward = tp - entry
         rr = reward / risk if risk > 0 else 0
+        
         if rr >= 3.0: score += 15; reasons.append(f"💰 盈虧比極佳 ({rr:.1f}R)")
         elif rr >= 2.0: score += 10; reasons.append(f"💰 盈虧比優秀 ({rr:.1f}R)")
+        
         curr_rsi = rsi.iloc[-1]
         if 40 <= curr_rsi <= 55: score += 10; reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
         elif curr_rsi > 70: score -= 15
+        
+        # --- 🔥 C. 優化成交量 (停止量邏輯) ---
         curr_rvol = rvol.iloc[-1]
-        if curr_rvol > 1.5: score += 10; reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
-        elif curr_rvol > 1.1: score += 5
+        last_open = df['Open'].iloc[-1]
+        last_close = df['Close'].iloc[-1]
+        is_green = last_close > last_open  # 收紅
+        
+        if curr_rvol > 1.5:
+            if is_green:
+                score += 15 # 爆量收紅 = 機構進場 (比原本的 +10 更高)
+                reasons.append(f"🛑 停止量確認 (爆量收紅 {curr_rvol:.1f}x)")
+            else:
+                # 爆量收黑 = 恐慌拋售未止 (不加分，甚至可以扣分)
+                score -= 5
+                reasons.append(f"⚠️ 賣壓沈重 (爆量收黑 {curr_rvol:.1f}x)")
+        elif curr_rvol > 1.1 and is_green:
+            score += 5 # 溫和放量收紅
+        elif curr_rvol < 0.8:
+            score -= 5 # 無量下跌，人氣渙散
+            
+        # ----------------------------------
+            
         if sweep_type: score += 20; reasons.append("💧 觸發流動性獵殺 (Sweep)")
         if golden_cross: score += 10; reasons.append("✨ 出現黃金交叉")
+        
         dist_pct = abs(df['Close'].iloc[-1] - entry) / entry
         if dist_pct < 0.01: score += 15; reasons.append("🎯 狙擊入場區")
         if trend: score += 5; reasons.append("📈 長期趨勢向上")
+        
         if market_bonus > 0: reasons.append("🌍 大盤順風車 (+5)")
         if market_bonus < 0: reasons.append("🌪️ 逆大盤風險 (-10)")
+        
         return max(int(score), 0), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
 
@@ -299,7 +317,7 @@ def calculate_smc(df):
         last = float(df['Close'].iloc[-1])
         return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 8. 繪圖核心 (徹底修復白邊與文字) ---
+# --- 8. 繪圖核心 ---
 def create_error_image(msg):
     fig, ax = plt.subplots(figsize=(5, 3))
     fig.patch.set_facecolor('#1e293b')
@@ -322,19 +340,9 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
         mc = mpf.make_marketcolors(up='#22c55e', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#334155', 'down':'#334155'})
         s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#334155', facecolor='#1e293b')
-        
-        # 🔥 修改處：調整 figsize, panel_ratios 和 padding
-        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), 
-            title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), # 字體加大
-            figsize=(8, 5), # 畫布變大
-            panel_ratios=(6, 2), 
-            scale_width_adjustment=dict(candle=1.2), 
-            returnfig=True, 
-            tight_layout=True) # 強制緊湊佈局
-        
+        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), figsize=(8, 5), panel_ratios=(6, 2), scale_width_adjustment=dict(candle=1.2), returnfig=True, tight_layout=True)
         fig.patch.set_facecolor('#1e293b')
         ax = axlist[0]; x_min, x_max = ax.get_xlim()
-        
         for i in range(2, len(plot_df)):
             idx = i - 1
             if plot_df['Low'].iloc[i] > plot_df['High'].iloc[i-2]: 
@@ -351,12 +359,7 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
             lowest = plot_df['Low'].min()
             label_text = "🌊 MAJOR SWEEP" if sweep_type == "MAJOR" else "💧 MINOR SWEEP"
             label_color = "#ef4444" if sweep_type == "MAJOR" else "#fbbf24" 
-            
-            # 🔥 修改處：將文字往左移動更多 (x_max - 10) 避免被切
-            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-10, lowest*0.98), 
-                        arrowprops=dict(facecolor=label_color, shrink=0.05), 
-                        color=label_color, fontsize=11, fontweight='bold', ha='center')
-        
+            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-10, lowest*0.98), arrowprops=dict(facecolor=label_color, shrink=0.05), color=label_color, fontsize=11, fontweight='bold', ha='center')
         line_style = ':' if is_wait else '-'
         ax.axhline(tp, color='#22c55e', linestyle=line_style, linewidth=1.5, alpha=0.8)
         ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1.5, alpha=0.9)
@@ -367,9 +370,7 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         if not is_wait:
             ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#22c55e', alpha=0.08))
             ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.08))
-        
         buf = BytesIO()
-        # 🔥 關鍵修復：bbox_inches='tight', pad_inches=0 (完全切除白邊)
         fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1, facecolor='#1e293b', edgecolor='none', dpi=100)
         plt.close(fig)
         buf.seek(0)
@@ -384,7 +385,6 @@ def send_discord_alert(results):
         print("⚠️ No Discord Webhook configured. Skipping alerts.")
         return
 
-    # 改回正常門檻：Score >= 85
     top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
     
     if not top_picks:
@@ -438,7 +438,6 @@ def process_ticker(t, app_data_dict, market_bonus):
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
         
-        # 🔥 新增：財報檢查
         earnings_warning = check_earnings(t) 
         
         is_bullish = curr > sma200
@@ -477,7 +476,6 @@ def process_ticker(t, app_data_dict, market_bonus):
 
         calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
 
-        # 🔥 財報警告 HTML 🔥
         earn_html = ""
         if earnings_warning:
             earn_html = f"<div style='background:rgba(239,68,68,0.2); color:#fca5a5; padding:8px; border-radius:6px; font-weight:bold; margin-bottom:10px; text-align:center; border:1px solid #ef4444;'>💣 {earnings_warning}</div>"
@@ -488,7 +486,7 @@ def process_ticker(t, app_data_dict, market_bonus):
             ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div>{earn_html}<div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
             
         app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
-        return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}, "earn": earnings_warning}
+        return {"ticker": t, "sector": item['sector'], "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}, "earn": earnings_warning}
     except Exception as e:
         print(f"Err {t}: {e}")
         return None
@@ -584,22 +582,24 @@ def main():
             cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>{earn_badge}<span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span></span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
-    json_data = json.dumps(APP_DATA)
+    # 🔥 關鍵修復：使用 Base64 編碼傳輸數據，避免 JSON 語法錯誤
+    json_str = json.dumps(APP_DATA)
+    b64_data = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
+
     final_html = f"""<!DOCTYPE html>
     <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
     <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} 
-    
     .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99; justify-content:center; overflow-y:auto; padding:10px; backdrop-filter: blur(5px); }} 
     .m-content {{ background:#1e293b; width:100%; max-width:600px; padding:20px; margin-top:40px; border-radius:16px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }} 
-    
     #chart-d, #chart-h {{ width: 100%; min-height: 300px; background: #1e293b; display: flex; align-items: center; justify-content: center; }}
     #chart-d img, #chart-h img {{ width: 100% !important; height: auto !important; display: block; border-radius: 8px; }}
-
     .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} 
+    .macro-grid {{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:15px; height: 120px; }}
+    .macro-card {{ width: 100%; height: 100%; }}
     .news-card {{ background:var(--card); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:10px; }}
     .news-title {{ font-size:1rem; font-weight:bold; color:var(--text); text-decoration:none; display:block; margin-top:5px; }}
     .news-meta {{ font-size:0.75rem; color:#94a3b8; display:flex; justify-content:space-between; }}
-    @media (max-width: 600px) {{ .top-grid {{ grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }} }}</style></head>
+    @media (max-width: 600px) {{ .top-grid, .macro-grid {{ grid-template-columns: repeat(2, 1fr); }} }}</style></head>
     <body>
     <div class="tradingview-widget-container" style="margin-bottom:15px">
       <div class="tradingview-widget-container__widget"></div>
@@ -612,7 +612,7 @@ def main():
     </div>
     <div class="market-bar" style="border-left:4px solid {market_color}"><div>{ "🟢" if market_status=="BULLISH" else "🔴" }</div><div><b>Market: {market_status}</b><div style="font-size:0.8rem;color:#94a3b8">{market_text}</div></div></div>
     
-    <div class="macro-grid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:15px; height: 120px;">
+    <div class="macro-grid">
         <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "CBOE:VIX","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
         <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "BINANCE:BTCUSDT","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
         <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "TVC:DXY","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
@@ -637,7 +637,7 @@ def main():
           }}
           </script>
         </div>
-        </div>
+    </div>
 
     <div id="news" class="content">{weekly_news_html}</div>
     <div style="text-align:center;color:#666;margin-top:30px;font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
@@ -662,7 +662,10 @@ def main():
     </div>
 
     <script>
-    const DATA={json_data};
+    // 🔥 使用 Base64 解碼 (最安全的數據傳輸方式)
+    const rawData = "{b64_data}";
+    const DATA = JSON.parse(atob(rawData));
+
     function setTab(id,el){{document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}}
     
     function updateCalculator(entry, sl) {{
