@@ -10,18 +10,19 @@ import numpy as np
 import base64
 import json
 import time
-import random
 from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
+import xml.etree.ElementTree as ET
+import random
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
 HISTORY_FILE = "history.json"
 
-# --- 1. 股票名單 ---
+# --- 1. 自動化選股核心 ---
 PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "MARA", "TSM", "ASML", "ARM"]
 
 STATIC_UNIVERSE = [
@@ -36,7 +37,7 @@ STATIC_UNIVERSE = [
     "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
 ]
 
-# --- 2. 歷史紀錄管理 ---
+# --- 歷史紀錄管理 ---
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
@@ -69,62 +70,21 @@ def generate_ticker_grid(picks, title, color_class="top-card"):
     html += "</div>"
     return html
 
-# --- 3. 新增優化函數 (ATR, Hammer, RS) ---
-
-def calculate_atr(df, period=14):
-    """計算 ATR (平均真實波幅) 用於止損"""
-    high = df['High']
-    low = df['Low']
-    close = df['Close'].shift(1)
-    
-    tr1 = high - low
-    tr2 = (high - close).abs()
-    tr3 = (low - close).abs()
-    
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    return tr.rolling(window=period).mean().iloc[-1]
-
-def check_hammer_candle(df):
-    """檢查是否出現 Hammer (下影線拒絕下跌)"""
-    try:
-        open_p = df['Open'].iloc[-1]
-        close_p = df['Close'].iloc[-1]
-        high_p = df['High'].iloc[-1]
-        low_p = df['Low'].iloc[-1]
-        
-        body = abs(close_p - open_p)
-        total_range = high_p - low_p
-        lower_wick = min(open_p, close_p) - low_p
-        
-        if total_range == 0: return False
-        # 條件：下影線長度 > 實體的 2 倍，且收盤價位於 K 線頂部 30%
-        is_long_wick = lower_wick > (body * 2)
-        is_top_close = close_p > (low_p + 0.7 * total_range)
-        
-        return is_long_wick and is_top_close
-    except: return False
-
-def calculate_rs_score(stock_df, spy_df, period=20):
-    """計算相對強度 (相對於 SPY)"""
-    try:
-        if len(stock_df) < period or len(spy_df) < period: return 0
-        stock_ret = (stock_df['Close'].iloc[-1] / stock_df['Close'].iloc[-period]) - 1
-        spy_ret = (spy_df['Close'].iloc[-1] / spy_df['Close'].iloc[-period]) - 1
-        return stock_ret - spy_ret
-    except: return 0
-
-# --- 4. 基礎輔助函數 ---
-
+# --- 核心邏輯 ---
 def calculate_beta(stock_returns, market_returns):
+    # 🔥 關鍵修復：如果沒有大盤數據，默認 Beta = 1.0 (避免被誤刪)
+    if len(market_returns) == 0: return 1.0
     if len(stock_returns) != len(market_returns):
         min_len = min(len(stock_returns), len(market_returns))
         stock_returns = stock_returns[-min_len:]
         market_returns = market_returns[-min_len:]
-    if len(market_returns) < 2: return 0 
-    covariance = np.cov(stock_returns, market_returns)[0][1]
-    variance = np.var(market_returns)
-    if variance == 0: return 0
-    return covariance / variance
+    if len(market_returns) < 2: return 1.0 
+    try:
+        covariance = np.cov(stock_returns, market_returns)[0][1]
+        variance = np.var(market_returns)
+        if variance == 0: return 1.0
+        return covariance / variance
+    except: return 1.0
 
 SECTOR_MAP = {
     "Technology": "💻 科技與軟體", "Communication Services": "📡 通訊與媒體", "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
@@ -134,6 +94,10 @@ SECTOR_MAP = {
 
 def get_stock_sector(ticker):
     try:
+        # 簡單映射，避免過多 API 請求導致變慢
+        if ticker in ["NVDA", "AMD", "TSM", "INTC", "MU", "QCOM", "ASML"]: return "⚡ 半導體"
+        if ticker in ["AAPL", "MSFT", "GOOGL", "META", "CRM"]: return "💻 科技與軟體"
+        
         info = yf.Ticker(ticker).info
         sector = info.get('sector', 'Unknown')
         industry = info.get('industry', 'Unknown')
@@ -145,55 +109,49 @@ def auto_select_candidates():
     print("🚀 啟動超級篩選器 (Priority First)...")
     full_list = PRIORITY_TICKERS + list(set(STATIC_UNIVERSE) - set(PRIORITY_TICKERS))
     valid_tickers = [] 
-    spy_df = None
-    
     try:
-        spy = yf.Ticker("SPY")
-        spy_df = spy.history(period="1y") # 保存 SPY DataFrame 供後續 RS 使用
-        if not spy_df.empty:
-            spy_returns = spy_df['Close'].pct_change().dropna()
-        else: spy_returns = []
-    except: 
-        spy_returns = []
-        spy_df = None
+        spy = yf.Ticker("SPY").history(period="1y")
+        if spy.empty: 
+            print("⚠️ SPY fetch failed, using default beta.")
+            spy_returns = []
+        else:
+            spy_returns = spy['Close'].pct_change().dropna()
+    except: spy_returns = []
     
     print(f"🔍 開始過濾...")
     for ticker in full_list:
         try:
-            # 隨機延遲避免被封
-            time.sleep(random.uniform(0.1, 0.3))
+            # 🔥 移除 market_cap 檢查以減少請求，避免被封鎖
             
-            try:
-                info = yf.Ticker(ticker).fast_info
-                if info.market_cap < 3_000_000_000: continue
-            except: pass
+            # 隨機延遲
+            time.sleep(random.uniform(0.1, 0.3))
             
             df = yf.Ticker(ticker).history(period="1y")
             if df is None or len(df) < 200: continue
             
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
-            
-            # 🔥 恢復趨勢過濾：只做多頭排列
             if close < sma200: continue 
             
             avg_vol = df['Volume'].tail(30).mean()
             avg_price = df['Close'].tail(30).mean()
             dollar_vol = avg_vol * avg_price
-            if dollar_vol < 100_000_000: continue 
+            if dollar_vol < 100_000_000: continue # 放寬到 1億
             
             stock_returns = df['Close'].pct_change().dropna()
             beta = calculate_beta(stock_returns, spy_returns)
-            # if beta < 1.0: continue # 暫時放寬 Beta 限制以測試
+            
+            # 🔥 暫時放寬 Beta 限制，確保有股票顯示
+            # if beta < 1.0: continue
             
             sector_name = get_stock_sector(ticker)
-            print(f"   ✅ {ticker} 入選! ({sector_name})")
+            print(f"   ✅ {ticker} 入選!")
             valid_tickers.append({'ticker': ticker, 'sector': sector_name})
         except: continue
     print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
-    return valid_tickers, spy_df # 回傳 spy_df
+    return valid_tickers
 
-# --- 5. 數據獲取 ---
+# --- 2. 新聞 ---
 def get_polygon_news():
     if not API_KEY: return "<div style='padding:20px'>API Key Missing</div>"
     news_html = ""
@@ -212,6 +170,7 @@ def get_polygon_news():
     except Exception as e: news_html = f"<div style='padding:20px'>News Error: {e}</div>"
     return news_html
 
+# --- 3. 市場大盤分析 ---
 def get_market_condition():
     try:
         print("🔍 Checking Market...")
@@ -223,9 +182,10 @@ def get_market_condition():
         else: return "BEARISH", "🔴 市場逆風 (大盤 < 50MA)", -10
     except: return "NEUTRAL", "Check Failed", 0
 
+# --- 4. 數據獲取 ---
 def fetch_data_safe(ticker, period, interval):
     try:
-        time.sleep(random.uniform(0.1, 0.2))
+        time.sleep(random.uniform(0.1, 0.2)) # 延遲
         dat = yf.Ticker(ticker).history(period=period, interval=interval)
         if dat is None or dat.empty: return None
         if not isinstance(dat.index, pd.DatetimeIndex): dat.index = pd.to_datetime(dat.index)
@@ -238,14 +198,18 @@ def check_earnings(ticker):
         stock = yf.Ticker(ticker)
         calendar = stock.calendar
         if calendar is not None and not calendar.empty:
-            earnings_date = calendar.iloc[0, 0] 
+            if isinstance(calendar, dict):
+                dates = calendar.get('Earnings Date', [])
+                if dates: earnings_date = dates[0]
+            else:
+                earnings_date = calendar.iloc[0, 0] 
             if isinstance(earnings_date, (datetime, pd.Timestamp)):
                 days_diff = (earnings_date.date() - datetime.now().date()).days
-                if 0 <= days_diff <= 7:
-                    return f"⚠️ Earnings: {days_diff}d"
+                if 0 <= days_diff <= 7: return f"⚠️ Earnings: {days_diff}d"
     except: pass
     return ""
 
+# --- 5. 技術指標 ---
 def calculate_indicators(df):
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
@@ -266,54 +230,37 @@ def calculate_indicators(df):
     else: perf_30d = 0
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
-# --- 6. 評分系統 (優化版) ---
-def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators, is_hammer, rs_score):
+# --- 6. 評分系統 ---
+def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators):
     try:
         score = 60 + market_bonus
         reasons = []
         rsi, rvol, golden_cross, trend, perf_30d = indicators
         strategies = 0
-        
-        # 1. Sweep 加分
         if sweep_type == "MAJOR":
-            strategies += 1; score += 25; reasons.append("🌊 強力獵殺 (Major Sweep)")
+            strategies += 1; score += 25; reasons.append("🌊 強力獵殺 (Major Sweep >20d)")
         elif sweep_type == "MINOR":
-            strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep)")
-            
-        # 2. 🔥 新增：Hammer (下影線) 加分
-        if is_hammer:
-            score += 15; reasons.append("🔨 出現 Hammer 拒絕下跌")
-            
-        # 3. 🔥 新增：RS (相對強度) 加分
-        if rs_score > 0:
-            score += 10; reasons.append("💪 強於大盤 (RS > 0)")
-        if rs_score > 0.05:
-            score += 10; reasons.append("🚀 遠強於大盤 (RS > 5%)")
-
+            strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep >10d)")
         if golden_cross: strategies += 1
-        
-        # 4. RSI
-        curr_rsi = rsi.iloc[-1]
-        if 40 <= curr_rsi <= 55: score += 10; reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
-        elif curr_rsi > 70: score -= 15
-        
-        # 5. Volume
-        curr_rvol = rvol.iloc[-1]
-        if curr_rvol > 1.5: score += 10; reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
-        elif curr_rvol > 1.1: score += 5
-        
+        if 40 <= rsi.iloc[-1] <= 55: strategies += 1
         risk = entry - sl
         reward = tp - entry
         rr = reward / risk if risk > 0 else 0
         if rr >= 3.0: score += 15; reasons.append(f"💰 盈虧比極佳 ({rr:.1f}R)")
-        
+        elif rr >= 2.0: score += 10; reasons.append(f"💰 盈虧比優秀 ({rr:.1f}R)")
+        curr_rsi = rsi.iloc[-1]
+        if 40 <= curr_rsi <= 55: score += 10; reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
+        elif curr_rsi > 70: score -= 15
+        curr_rvol = rvol.iloc[-1]
+        if curr_rvol > 1.5: score += 10; reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
+        elif curr_rvol > 1.1: score += 5
+        if sweep_type: score += 20; reasons.append("💧 觸發流動性獵殺 (Sweep)")
+        if golden_cross: score += 10; reasons.append("✨ 出現黃金交叉")
         dist_pct = abs(df['Close'].iloc[-1] - entry) / entry
         if dist_pct < 0.01: score += 15; reasons.append("🎯 狙擊入場區")
         if trend: score += 5; reasons.append("📈 長期趨勢向上")
-        
         if market_bonus > 0: reasons.append("🌍 大盤順風車 (+5)")
         if market_bonus < 0: reasons.append("🌪️ 逆大盤風險 (-10)")
-        
         return max(int(score), 0), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
 
@@ -437,34 +384,22 @@ def send_discord_alert(results):
     except: pass
 
 # --- 10. 單一股票處理 ---
-def process_ticker(t, app_data_dict, market_bonus, spy_df):
+def process_ticker(t, app_data_dict, market_bonus):
     try:
         df_d = fetch_data_safe(t, "1y", "1d")
         if df_d is None or len(df_d) < 50: return None
         df_h = fetch_data_safe(t, "1mo", "1h")
         if df_h is None or df_h.empty: df_h = df_d
-        
         curr = float(df_d['Close'].iloc[-1])
         sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
         if pd.isna(sma200): sma200 = curr
-        
-        # 🔥 新增：計算 ATR 並更新止損
-        atr = calculate_atr(df_d)
-        
         bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
-        
-        # 🔥 優化止損：使用 ATR 2倍
-        sl = entry - (2 * atr)
-        
         tp = bsl
         earnings_warning = check_earnings(t) 
-        
         is_bullish = curr > sma200
         in_discount = curr < eq
-        
         wait_reason = ""
         signal = "WAIT"
-        
         if not is_bullish: wait_reason = "📉 逆勢"
         elif not in_discount: wait_reason = "💸 溢價"
         elif not (found_fvg or sweep_type): wait_reason = "💤 無訊號"
@@ -472,13 +407,8 @@ def process_ticker(t, app_data_dict, market_bonus, spy_df):
             signal = "LONG"
             wait_reason = ""
 
-        # 🔥 新增：Hammer 和 RS
-        is_hammer = check_hammer_candle(df_d)
-        rs_score = calculate_rs_score(df_d, spy_df) if spy_df is not None else 0
-
         indicators = calculate_indicators(df_d)
-        # 傳入新指標給評分系統
-        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators, is_hammer, rs_score)
+        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators)
         
         is_wait = (signal == "WAIT")
         img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
@@ -495,7 +425,7 @@ def process_ticker(t, app_data_dict, market_bonus, spy_df):
             elite_html = f"<div style='background:#1e293b; border:1px solid #334155; padding:15px; border-radius:12px; margin:15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'><div style='font-weight:bold; color:#10b981; font-size:1.1rem; margin-bottom:8px;'>💎 AI 戰略分析 (Score {score})</div><div style='font-size:0.9rem; color:#cbd5e1; margin-bottom:10px;'>{confluence_text}</div><ul style='margin:0; padding-left:20px; font-size:0.85rem; color:#94a3b8; line-height:1.5;'>{reasons_html}</ul>{sweep_text}</div>"
         
         stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
-        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f} (ATR Protected)</div></div>"
+        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
         earn_html = f"<div style='background:rgba(239,68,68,0.2); color:#fca5a5; padding:8px; border-radius:6px; font-weight:bold; margin-bottom:10px; text-align:center; border:1px solid #ef4444;'>💣 {earnings_warning}</div>" if earnings_warning else ""
 
         if signal == "LONG":
@@ -506,7 +436,6 @@ def process_ticker(t, app_data_dict, market_bonus, spy_df):
         app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
         return {"ticker": t, "sector": item['sector'], "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}, "earn": earnings_warning}
     except Exception as e:
-        print(f"Err {t}: {e}")
         return None
 
 # --- 11. 主程式 ---
@@ -517,20 +446,20 @@ def main():
     market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
     
     APP_DATA, screener_rows_list = {}, []
-    candidates_data, spy_df = auto_select_candidates() # 接收 SPY DF
+    candidates_data = auto_select_candidates()
     processed_results = []
     
     for item in candidates_data:
         t = item['ticker']
         sector = item['sector']
-        res = process_ticker(t, APP_DATA, market_bonus, spy_df) # 傳入 SPY DF
+        res = process_ticker(t, APP_DATA, market_bonus)
         if res:
             if res['signal'] == "LONG": screener_rows_list.append(res)
             processed_results.append({'ticker': t, 'sector': sector, 'score': res['score'], 'signal': res['signal'], 'price': res['price'], 'data': res['data'], 'earn': res['earn']})
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
     
-    # --- 🔥 歷史數據處理 🔥 ---
+    # --- 🔥 歷史數據處理邏輯 (History Logic) 🔥 ---
     history = load_history()
     today_str = datetime.now().strftime('%Y-%m-%d')
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -550,7 +479,7 @@ def main():
 
     top_5_tickers = processed_results[:5]
     
-    # HTML 生成
+    # --- 生成 HTML ---
     top_5_html = generate_ticker_grid(top_5_today, "🏆 Today's Top 5")
     yesterday_html = generate_ticker_grid(yesterday_picks, f"🥈 Yesterday's Picks ({yesterday_str})", "top-card")
     day_before_html = generate_ticker_grid(day_before_picks, f"🥉 Day Before's Picks ({day_before_str})", "top-card")
@@ -571,12 +500,12 @@ def main():
             rvol_val = d['rvol']
             rvol_str = f"Vol {rvol_val:.1f}x"
             rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>" if rvol_val > 1.5 else f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
-            badge_html = "<span class='badge b-long'>LONG</span>" if d['signal'] == 'LONG' else "<span class='badge b-wait'>WAIT</span>"
+            badge_html = "<span class='badge b-long'>LONG</span>" if d['signal'] == 'LONG' else f"<span class='badge b-wait' style='font-size:0.65rem'>{d['wait_reason']}</span>"
             earn_badge = f"<span style='color:#ef4444;font-weight:bold;font-size:0.7rem;margin-right:5px;'>{item['earn']}</span>" if item['earn'] else ""
             cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>{earn_badge}<span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span></span>{rvol_html}</div></div>"
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
-    # 使用 Base64 編碼避免 JSON 錯誤
+    # 🔥 Base64 編碼修復 (避免 JSON 錯誤)
     json_str = json.dumps(APP_DATA)
     b64_data = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
 
@@ -631,7 +560,7 @@ def main():
           }}
           </script>
         </div>
-        </div>
+    </div>
 
     <div id="news" class="content">{weekly_news_html}</div>
     <div style="text-align:center;color:#666;margin-top:30px;font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
@@ -656,7 +585,7 @@ def main():
     </div>
 
     <script>
-    // 🔥 使用 Base64 解碼，避免 JSON 語法錯誤
+    // 🔥 使用 Base64 解碼 (最安全的數據傳輸方式)
     const rawData = "{b64_data}";
     const DATA = JSON.parse(atob(rawData));
 
