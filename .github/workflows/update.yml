@@ -1,16 +1,15 @@
-name: Build and Deploy
+name: Daily Stock Screener
 
 on:
   schedule:
-    - cron: '0 */4 * * *' # 每 4 小時跑一次
-  workflow_dispatch:      # 允許你手動按按鈕跑
-
-permissions:
-  contents: write
+    # 這裡設定每天自動執行的時間 (例如 UTC 21:00 = 台灣時間清晨 05:00)
+    - cron: '0 21 * * 1-5'
+  workflow_dispatch: # 允許手動按鈕觸發
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -18,25 +17,26 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.9'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # 🔥 確保這裡有 requests
+          pip install yfinance mplfinance pandas numpy requests lxml
 
-      - name: Run Analysis Script
+      - name: Run analysis script
+        # 🔥 這裡是關鍵！我們要告訴 GitHub 把 Secrets 傳進去
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python main.py
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./
-          publish_branch: gh-pages
-          force_orphan: true
-          keep_files: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          # 如果沒有變更就不 Commit，避免報錯
+          git commit -m "Update daily stock data" || echo "No changes to commit"
+          git push
