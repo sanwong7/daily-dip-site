@@ -162,11 +162,10 @@ def get_polygon_news():
     except Exception as e: news_html = f"<div style='padding:20px'>News Error: {e}</div>"
     return news_html
 
-# --- 3. 市場大盤分析 (🔥 新增 QQQ MA20 濾網) ---
+# --- 3. 市場大盤分析 ---
 def get_market_condition():
     try:
         print("🔍 Checking Market (QQQ & SPY)...")
-        # 抓取 QQQ 判斷科技股趨勢
         qqq = yf.Ticker("QQQ").history(period="6mo")
         
         if qqq.empty: return "NEUTRAL", "數據不足", 0
@@ -174,7 +173,6 @@ def get_market_condition():
         qqq_ma20 = qqq['Close'].rolling(20).mean().iloc[-1]
         qqq_curr = qqq['Close'].iloc[-1]
         
-        # 🔥 條件 1：QQQ 必須站上 20MA 才是真正的順風
         is_bullish = qqq_curr > qqq_ma20
         
         if is_bullish:
@@ -242,11 +240,6 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_t
         elif sweep_type == "MINOR":
             strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep)")
         
-        # 額外獎勵突破確認
-        if is_bullish:
-            score += 10
-            reasons.append("🚀 突破確認 (Close > Prev High)")
-
         if golden_cross: strategies += 1
         if 40 <= rsi.iloc[-1] <= 55: strategies += 1
         
@@ -277,7 +270,7 @@ def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_t
         return max(int(score), 0), reasons, rr, rvol.iloc[-1], perf_30d, strategies
     except: return 50, [], 0, 0, 0, 0
 
-# --- 7. SMC 運算 (🔥 新增：突破確認邏輯) ---
+# --- 7. SMC 運算 (🔥 已修正：完全對齊 Backtest 邏輯) ---
 def calculate_smc(df):
     try:
         window = 50
@@ -286,41 +279,51 @@ def calculate_smc(df):
         ssl_long = float(recent['Low'].min())
         eq = (bsl + ssl_long) / 2
         
+        # 預設值
         best_entry = eq
+        sweep_low = ssl_long # 預設止蝕
+        
         found_fvg = False
         sweep_type = None 
         
-        # --- 檢查昨日 K 線 (Confirmation Setup) ---
-        # 邏輯：檢查「昨天」是否是 Sweep，如果是，今天是否突破了昨天高點？
+        # --- Backtest 核心邏輯對齊 ---
+        # 邏輯：跌破 20日低點 且 收盤收回
+        # 檢查順序：由新到舊，優先捕捉最近的訊號
         
-        prev_candle = df.iloc[-2]  # 昨天
-        curr_candle = df.iloc[-1]  # 今天
+        last_3 = recent.tail(3)
+        prior_data = recent.iloc[:-3]
         
-        # 計算前天之前的 10 天低點 (用於判斷昨天是否破底)
-        lookback_lows = df['Low'].iloc[-13:-2].min() # 昨天的前 10 天
+        # 定義支撐線 (過去 20 日最低，不包含當前這幾根)
+        low_20d = prior_data['Low'].tail(20).min()
         
-        is_prev_sweep = False
-        
-        # 判斷昨天是否發生 Sweep
-        if prev_candle['Low'] < lookback_lows and prev_candle['Close'] > prev_candle['Low']:
-            is_prev_sweep = True
+        for i in range(len(last_3)):
+            candle = last_3.iloc[i]
             
-        # 判斷確認訊號 (Confirmation)
-        is_confirmed = False
-        if is_prev_sweep and curr_candle['Close'] > prev_candle['High']:
-            is_confirmed = True
-            sweep_type = "MAJOR" if prev_candle['Low'] <= ssl_long else "MINOR"
-            best_entry = curr_candle['Close'] # 確認後以現價進場
-        
-        # 如果今天正在發生 Sweep (但還沒確認)
-        elif curr_candle['Low'] < df['Low'].iloc[-12:-1].min() and curr_candle['Close'] > curr_candle['Low']:
-             # 標記為潛在 Sweep，但需要等待
-             pass 
+            # 🔥 BACKTEST 條件：Low 跌破 Low_20d 且 Close 站回 Low_20d
+            if candle['Low'] < low_20d and candle['Close'] > low_20d:
+                sweep_type = "MAJOR"
+                best_entry = float(candle['Close']) # ALIGN 1: 收盤價進場 (Market on Close)
+                sweep_low = float(candle['Low'])    # ALIGN 2: 止蝕設在該K線最低點
+                
+                # 找到最新訊號就停止，模擬實戰當下反應
+                # 注意：這裡如果是回測程式，會遍歷所有歷史。
+                # 這裡是 Screener，我們只關心最近有沒有觸發。
+                
+        # 輔助：FVG 檢測 (次要)
+        if not sweep_type:
+            for i in range(2, len(recent)):
+                if recent['Low'].iloc[i] > recent['High'].iloc[i-2]:
+                    fvg = float(recent['Low'].iloc[i])
+                    if fvg < eq:
+                        best_entry = fvg
+                        sweep_low = ssl_long # FVG 還是用寬止蝕
+                        found_fvg = True
+                        break
 
-        return bsl, ssl_long, eq, best_entry, ssl_long*0.99, found_fvg, sweep_type, is_confirmed
+        return bsl, ssl_long, eq, best_entry, sweep_low*0.99, found_fvg, sweep_type
     except:
         last = float(df['Close'].iloc[-1])
-        return last*1.05, last*0.95, last, last, last*0.94, False, None, False
+        return last*1.05, last*0.95, last, last, last*0.94, False, None
 
 # --- 8. 繪圖核心 ---
 def create_error_image(msg):
@@ -410,7 +413,7 @@ def send_discord_alert(results):
     try: requests.post(DISCORD_WEBHOOK, json={"username": "Daily Dip Bot", "embeds": embeds})
     except: pass
 
-# --- 10. 單一股票處理 (核心修改區) ---
+# --- 10. 單一股票處理 ---
 def process_ticker(t, app_data_dict, market_bonus):
     try:
         df_d = fetch_data_safe(t, "1y", "1d")
@@ -421,8 +424,8 @@ def process_ticker(t, app_data_dict, market_bonus):
         sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
         if pd.isna(sma200): sma200 = curr
         
-        # 🔥 修改：使用新的 SMC 邏輯 (含突破確認)
-        bsl, ssl, eq, entry, sl, found_fvg, sweep_type, is_confirmed = calculate_smc(df_d)
+        # 🔥 修改：使用 Backtest 對齊版 SMC
+        bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
         tp = bsl
         
         earnings_warning = check_earnings(t) 
@@ -434,21 +437,19 @@ def process_ticker(t, app_data_dict, market_bonus):
         wait_reason = ""
         signal = "WAIT"
         
-        # 🔥 邏輯更新：
-        # 1. 必須在 200MA 之上
-        # 2. 必須有 Sweep 訊號 (昨日發生)
-        # 3. 必須有 突破確認 (今天收盤 > 昨天高點)
+        # 🔥 邏輯：
+        # 1. 必須在 200MA 之上 (Bullish Trend)
+        # 2. 必須有 Sweep 訊號 (Low < 20d_Low & Close > 20d_Low)
         
         if not is_bullish: wait_reason = "📉 逆勢"
-        elif market_bonus < 0: wait_reason = "⚠️ 大盤不佳" # QQQ 逆風
+        elif market_bonus < 0: wait_reason = "⚠️ 大盤不佳" 
         elif not sweep_type: wait_reason = "💤 無訊號"
-        elif not is_confirmed: wait_reason = "⏳ 等待突破" # 有 Sweep 但沒突破
         else:
             signal = "LONG"
             wait_reason = ""
 
         indicators = calculate_indicators(df_d)
-        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_confirmed, market_bonus, sweep_type, indicators)
+        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators)
         
         is_wait = (signal == "WAIT")
         img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
