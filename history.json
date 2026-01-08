@@ -1,29 +1,29 @@
 {
     "2026-01-08": [
         {
-            "ticker": "DDOG",
-            "score": 150,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
+            "ticker": "ABBV",
+            "score": 95,
+            "sector": "\ud83d\udc8a \u91ab\u7642\u4fdd\u5065"
         },
         {
-            "ticker": "CDNS",
-            "score": 140,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
+            "ticker": "COP",
+            "score": 90,
+            "sector": "\ud83d\udee2\ufe0f \u80fd\u6e90"
         },
         {
-            "ticker": "AAPL",
-            "score": 130,
-            "sector": "\ud83d\udcbb \u79d1\u6280\u8207\u8edf\u9ad4"
+            "ticker": "CVX",
+            "score": 85,
+            "sector": "\ud83d\udee2\ufe0f \u80fd\u6e90"
         },
         {
-            "ticker": "APP",
-            "score": 125,
-            "sector": "\ud83d\udce1 \u901a\u8a0a\u8207\u5a92\u9ad4"
+            "ticker": "MCD",
+            "score": 85,
+            "sector": "\ud83d\udecd\ufe0f \u975e\u5fc5\u9700\u6d88\u8cbb (\u5faa\u74b0)"
         },
         {
-            "ticker": "BLK",
-            "score": 100,
-            "sector": "\ud83c\udfe6 \u91d1\u878d\u670d\u52d9"
+            "ticker": "UNP",
+            "score": 85,
+            "sector": "\ud83c\udfed \u5de5\u696d"
         }
     ]
 }
