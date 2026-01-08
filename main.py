@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 
 # --- 0. 設定 ---
 API_KEY = os.environ.get("POLYGON_API_KEY")
+DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL") # 獲取 GitHub Secret
 
 # --- 1. 自動化選股核心 ---
 
@@ -302,7 +303,49 @@ def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
         print(f"Plot Error: {e}")
         return create_error_image("Plot Error")
 
-# --- 9. 單一股票處理 ---
+# --- 9. Discord 通知功能 (新增) ---
+def send_discord_alert(results):
+    if not DISCORD_WEBHOOK:
+        print("⚠️ No Discord Webhook configured.")
+        return
+
+    # 只選 Score >= 90 且是 LONG 的前 3 名，避免洗版
+    top_picks = [r for r in results if r['score'] >= 90 and r['signal'] == "LONG"][:3]
+    
+    if not top_picks:
+        print("ℹ️ No high-quality setups to alert.")
+        return
+
+    embeds = []
+    for pick in top_picks:
+        data = pick['data']
+        # 構建 Discord Embed
+        embed = {
+            "title": f"🚀 {pick['ticker']} - Potential Long Setup",
+            "description": f"**Score: {pick['score']}** | Vol: {data['rvol']:.1f}x",
+            "color": 5763717, # Green
+            "fields": [
+                {"name": "Entry", "value": f"${data['entry']:.2f}", "inline": True},
+                {"name": "Stop Loss", "value": f"${data['sl']:.2f}", "inline": True},
+                {"name": "Current", "value": f"${pick['price']:.2f}", "inline": True},
+                {"name": "Status", "value": "✅ LONG", "inline": True}
+            ],
+            "footer": {"text": "Daily Dip Pro • SMC Strategy"}
+        }
+        embeds.append(embed)
+
+    payload = {
+        "username": "Daily Dip Bot",
+        "embeds": embeds
+    }
+
+    try:
+        requests.post(DISCORD_WEBHOOK, json=payload)
+        print("✅ Discord alert sent!")
+    except Exception as e:
+        print(f"❌ Failed to send Discord alert: {e}")
+
+# --- 10. 單一股票處理 ---
 def process_ticker(t, app_data_dict, market_bonus):
     try:
         df_d = fetch_data_safe(t, "1y", "1d")
@@ -352,7 +395,6 @@ def process_ticker(t, app_data_dict, market_bonus):
         
         stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
 
-        # 🔥 新增：倉位計算器 (Position Calculator) 🔥
         calculator_html = f"""
         <div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'>
             <div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div>
@@ -375,19 +417,18 @@ def process_ticker(t, app_data_dict, market_bonus):
         """
 
         if signal == "LONG":
-            # 把 calculator_html 加進去
             ai_html = f"<div class='deploy-box long' style='border:none; padding:0;'><div class='deploy-title' style='color:#10b981; font-size:1.3rem; margin-bottom:15px;'>✅ LONG SETUP</div>{stats_dashboard}{elite_html}{calculator_html}<div style='background:#1e293b; padding:12px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-family:monospace; color:#cbd5e1;'><span>🔵 Entry: ${entry:.2f}</span><span style='color:#ef4444;'>🔴 SL: ${sl:.2f}</span></div></div>"
         else:
             ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div><div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
             
-        # 🔥 重要：把 entry 和 sl 數值傳給前端，方便 JS 計算
         app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
-        return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d}
+        # 這裡的 data 結構要傳給 discord 函數用
+        return {"ticker": t, "price": curr, "signal": signal, "wait_reason": wait_reason, "cls": cls, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}}
     except Exception as e:
         print(f"Err {t}: {e}")
         return None
 
-# --- 10. 主程式 ---
+# --- 11. 主程式 ---
 def main():
     print("🚀 啟動超級篩選器 (Priority First)...")
     weekly_news_html = get_polygon_news()
@@ -404,9 +445,13 @@ def main():
         res = process_ticker(t, APP_DATA, market_bonus)
         if res:
             if res['signal'] == "LONG": screener_rows_list.append(res)
-            processed_results.append({'ticker': t, 'sector': sector, 'score': res['score'], 'data': res})
+            processed_results.append({'ticker': t, 'sector': sector, 'score': res['score'], 'signal': res['signal'], 'price': res['price'], 'data': res['data']})
             
     processed_results.sort(key=lambda x: x['score'], reverse=True)
+    
+    # 🔥 發送 Discord 通知 (只發送符合條件的最強 3 隻)
+    send_discord_alert(processed_results)
+
     top_5_tickers = processed_results[:5]
     
     top_5_html = ""
@@ -521,16 +566,12 @@ def main():
     const DATA={json_data};
     function setTab(id,el){{document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}}
     
-    // --- 🚀 自動計算器邏輯 ---
     function updateCalculator(entry, sl) {{
         const cap = parseFloat(document.getElementById('calc-capital').value) || 0;
         const risk = parseFloat(document.getElementById('calc-risk').value) || 0;
         const resultEl = document.getElementById('calc-result');
-        
-        // 保存設定
         localStorage.setItem('user_capital', cap);
         localStorage.setItem('user_risk', risk);
-        
         if (cap > 0 && risk > 0 && entry > 0 && sl > 0 && entry > sl) {{
             const riskAmount = cap * (risk / 100);
             const riskPerShare = entry - sl;
@@ -542,7 +583,6 @@ def main():
             resultEl.style.color = "#64748b";
         }}
     }}
-    // ----------------------
 
     function openModal(t){{
         const d=DATA[t];if(!d)return;
@@ -571,21 +611,14 @@ def main():
         }};
         btnArea.appendChild(tvBtn);
 
-        // --- 🚀 初始化計算器 (如果有 LONG 訊號) ---
         if (d.signal === "LONG") {{
             const capInput = document.getElementById('calc-capital');
             const riskInput = document.getElementById('calc-risk');
-            
-            // 讀取上次記憶
             capInput.value = localStorage.getItem('user_capital') || '';
             riskInput.value = localStorage.getItem('user_risk') || '1.0';
-            
-            // 綁定事件
-            const runCalc = () => updateCalculator(d.entry, d.sl);
+            const runCalc = () => updateCalculator(d.data.entry, d.data.sl);
             capInput.oninput = runCalc;
             riskInput.oninput = runCalc;
-            
-            // 立即計算一次
             runCalc();
         }}
     }}
