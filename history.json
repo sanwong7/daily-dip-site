@@ -25,5 +25,32 @@
             "score": 140,
             "sector": "\ud83d\uded2 \u5fc5\u9700\u6d88\u8cbb (\u9632\u79a6)"
         }
+    ],
+    "2026-01-09": [
+        {
+            "ticker": "GE",
+            "score": 154,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GOOGL",
+            "score": 134,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "TSLA",
+            "score": 124,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MU",
+            "score": 120,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "ABNB",
+            "score": 116,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
