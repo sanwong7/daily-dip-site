@@ -38,11 +38,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # 檢查是否有檔案變更
-          git add index.html history.json
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Auto-update: Daily stock data [skip ci]"
-            git push
-          fi
+          git pull --rebase origin main  # <--- 🔥 新增這行：先抓最新版，再合併
+          git add .
+          git commit -m "Update daily stock data & history" || echo "No changes to commit"
+          git push origin main
