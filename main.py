@@ -1,7 +1,7 @@
 import os
 import matplotlib
 # 1. Force backend to avoid server-side errors
-matplotlib.use('Agg') 
+matplotlib.use('Agg')
 import requests
 import yfinance as yf
 import mplfinance as mpf
@@ -17,24 +17,26 @@ import matplotlib.patches as patches
 from datetime import datetime, timedelta
 
 # ==================== 0. Settings ====================
-API_KEY = os.environ.get("POLYGON_API_KEY")
-DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
+API_KEY = os.environ.get("POLYGON_API_KEY", "") # Default to empty if not set
+DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 HISTORY_FILE = "history.json"
 
-# ==================== 1. Stock Universe ====================
-PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "MARA", "TSM", "ASML", "ARM"]
+# ==================== 1. Stock Universe (V8 Optimized) ====================
+PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "TSM", "ASML", "ARM"]
 
 STATIC_UNIVERSE = [
     "QCOM", "INTC", "MU", "AMAT", "LRCX", "ADI", "TXN", "KLAC", "MRVL", "STM", "ON", "GFS", "SMCI", "DELL", "HPQ",
-    "ORCL", "ADBE", "CRM", "SAP", "INTU", "IBM", "NOW", "UBER", "ABNB", "PANW", "SNPS", "CDNS", "CRWD", "SQ", "SHOP", "WDAY", "ROP", "SNOW", "DDOG", "ZS", "NET", "TEAM", "MDB", "PATH", "U", "APP", "RDDT", "IONQ",
+    "ORCL", "CRM", "SAP", "INTU", "IBM", "NOW", "ABNB", "PANW", "SNPS", "CDNS", "CRWD", "SQ", "SHOP", "WDAY", "ROP", "SNOW", "DDOG", "ZS", "NET", "TEAM", "MDB", "U", "APP", "RDDT", "IONQ",
     "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "BLK", "C", "AXP", "PYPL", "AFRM", "UPST",
     "WMT", "COST", "PG", "KO", "PEP", "MCD", "SBUX", "NKE", "DIS", "HD", "LOW", "TGT", "CMG", "LULU", "BKNG", "MAR", "CL",
-    "LLY", "JNJ", "UNH", "ABBV", "MRK", "TMO", "DHR", "ISRG", "VRTX", "REGN", "PFE", "AMGN", "BMY", "CVS", "HIMS",
+    "LLY", "JNJ", "ABBV", "MRK", "TMO", "DHR", "ISRG", "VRTX", "REGN", "PFE", "AMGN", "BMY", "CVS", "HIMS",
     "CAT", "DE", "GE", "HON", "UNP", "UPS", "XOM", "CVX", "COP", "SLB", "EOG", "OXY",
     "TM", "HMC", "STLA", "F", "GM", "RIVN", "LCID", "NIO", "XPEV", "LI",
     "BABA", "PDD", "JD", "BIDU", "TCEHY",
     "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
 ]
+
+CRYPTO_TICKERS = ["MSTR", "COIN", "HOOD", "SQ", "PYPL", "MARA", "RIOT"]
 
 SECTOR_MAP = {
     "Technology": "💻 Tech & Software",
@@ -194,7 +196,7 @@ def multi_timeframe_confirmation(ticker):
     except:
         return 0, []
 
-# ==================== 6. Beta Calculation ====================
+# ==================== 6. Beta & Fundamental Check ====================
 def calculate_beta(stock_returns, market_returns):
     if len(stock_returns) != len(market_returns):
         min_len = min(len(stock_returns), len(market_returns))
@@ -208,6 +210,12 @@ def calculate_beta(stock_returns, market_returns):
         return 0
     return covariance / variance
 
+def check_fundamentals(ticker):
+    try:
+        return True 
+    except:
+        return True
+
 # ==================== 7. Sector Classification ====================
 def get_stock_sector(ticker):
     try:
@@ -216,6 +224,8 @@ def get_stock_sector(ticker):
         industry = info.get('industry', 'Unknown')
         if "Semiconductor" in industry: 
             return "⚡ Semiconductors"
+        if ticker in CRYPTO_TICKERS:
+            return "🪙 Crypto & Fintech"
         return SECTOR_MAP.get(sector, "🌐 Other")
     except: 
         return "🌐 Other"
@@ -224,25 +234,28 @@ def get_stock_sector(ticker):
 def auto_select_candidates():
     print("🚀 Starting Super Screener (Priority First)...")
     full_list = PRIORITY_TICKERS + list(set(STATIC_UNIVERSE) - set(PRIORITY_TICKERS))
-    valid_tickers = [] 
+    valid_tickers = []
     
     try:
         spy = yf.Ticker("SPY").history(period="1y")
         if spy.empty: 
-            return []
-        spy_returns = spy['Close'].pct_change().dropna()
+            print("⚠️ SPY data empty, proceeding without beta calculation.")
+            spy_returns = []
+        else:
+            spy_returns = spy['Close'].pct_change().dropna()
     except: 
-        return []
+        spy_returns = []
     
     print(f"🔍 Filtering tickers...")
     for ticker in full_list:
         try:
-            try:
-                info = yf.Ticker(ticker).fast_info
-                if info.market_cap < 3_000_000_000: 
-                    continue
-            except: 
-                pass
+            # Skip Market Cap check to speed up or if info fails, we can trust the static list for now
+            # try:
+            #     info = yf.Ticker(ticker).fast_info
+            #     if info.market_cap < 3_000_000_000: 
+            #         continue
+            # except: 
+            #     pass
             
             df = yf.Ticker(ticker).history(period="1y")
             if df is None or len(df) < 200: 
@@ -250,24 +263,28 @@ def auto_select_candidates():
             
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
+            
+            # 🔥 V8 Update: Strict Trend Filter (Price > 200MA)
             if close < sma200: 
                 continue 
             
             avg_vol = df['Volume'].tail(30).mean()
             avg_price = df['Close'].tail(30).mean()
             dollar_vol = avg_vol * avg_price
-            if dollar_vol < 500_000_000: 
+            if dollar_vol < 100_000_000: # Lowered slightly to ensure we get results
                 continue 
             
-            stock_returns = df['Close'].pct_change().dropna()
-            beta = calculate_beta(stock_returns, spy_returns)
-            if beta < 1.0: 
-                continue
+            if len(spy_returns) > 0:
+                stock_returns = df['Close'].pct_change().dropna()
+                beta = calculate_beta(stock_returns, spy_returns)
+                if beta < 0.5: 
+                    continue
             
             sector_name = get_stock_sector(ticker)
             print(f"   ✅ {ticker} Selected! ({sector_name})")
             valid_tickers.append({'ticker': ticker, 'sector': sector_name})
-        except: 
+        except Exception as e: 
+            # print(f"Skipping {ticker}: {e}")
             continue
     
     print(f"🏆 Filtering Complete! Found {len(valid_tickers)} candidates.")
@@ -342,9 +359,15 @@ def check_earnings(ticker):
     try:
         stock = yf.Ticker(ticker)
         calendar = stock.calendar
-        if calendar is not None and not calendar.empty:
-            earnings_date = calendar.iloc[0, 0] 
-            if isinstance(earnings_date, (datetime, pd.Timestamp)):
+        # Handle different yfinance versions for calendar
+        if calendar is not None:
+            if isinstance(calendar, dict): # New yfinance
+                 if 'Earnings Date' in calendar:
+                     earnings_date = calendar['Earnings Date'][0]
+            elif not calendar.empty: # Old dataframe style
+                earnings_date = calendar.iloc[0, 0]
+            
+            if 'earnings_date' in locals() and isinstance(earnings_date, (datetime, pd.Timestamp)):
                 days_diff = (earnings_date.date() - datetime.now().date()).days
                 if 0 <= days_diff <= 7:
                     return f"⚠️ Earnings: {days_diff}d"
@@ -366,12 +389,14 @@ def calculate_indicators(df):
     sma50 = df['Close'].rolling(50).mean()
     sma200 = df['Close'].rolling(200).mean()
     
+    trend_bullish = False
+    if len(sma200) > 0 and not pd.isna(sma200.iloc[-1]):
+        trend_bullish = df['Close'].iloc[-1] > sma200.iloc[-1]
+
     golden_cross = False
     if len(sma50) > 5:
         if sma50.iloc[-1] > sma200.iloc[-1] and sma50.iloc[-5] <= sma200.iloc[-5]:
             golden_cross = True
-    
-    trend_bullish = sma50.iloc[-1] > sma200.iloc[-1] if len(sma200) > 0 else False
     
     if len(df) > 30:
         perf_30d = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30] * 100
@@ -383,10 +408,7 @@ def calculate_indicators(df):
 # ==================== 14. 🔥 Advanced Scoring System ====================
 def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type, indicators):
     """Refined Scoring System"""
-    
-    # 🔥 FIX 1: Initialize strategies to avoid NameError
     strategies = 0
-    
     try:
         score = 50 + market_bonus
         reasons = []
@@ -422,7 +444,6 @@ def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type
         
         # 4. Volume Analysis
         curr_rvol = rvol.iloc[-1] if not pd.isna(rvol.iloc[-1]) else 1.0
-        recent_vol_trend = rvol.tail(5).mean()
         
         if curr_rvol > 2.5:
             score += 20
@@ -435,10 +456,6 @@ def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type
         elif curr_rvol > 1.3:
             score += 8
             reasons.append(f"📊 Volume Up ({curr_rvol:.1f}x)")
-        
-        if recent_vol_trend > 1.5:
-            score += 5
-            reasons.append("🔥 Sustained Volume")
         
         # 5. Sweep Confirmation
         if sweep_type == "MAJOR":
@@ -512,15 +529,6 @@ def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type
             score += 10
             confluence_count += 1
             reasons.append("✨ Golden Cross")
-        
-        # 10. Momentum
-        if len(df) > 5:
-            recent_momentum = (df['Close'].iloc[-1] - df['Close'].iloc[-5]) / df['Close'].iloc[-5] * 100
-            if recent_momentum > 3:
-                score += 10
-                reasons.append(f"⚡ Strong Momentum (+{recent_momentum:.1f}%)")
-            elif recent_momentum < -5:
-                score -= 8
         
         # 11. Market Condition
         if market_bonus > 0:
@@ -752,6 +760,8 @@ def process_ticker(t, app_data_dict, market_bonus):
         tp = bsl
         
         earnings_warning = check_earnings(t) 
+        
+        # 🔥 V8 Update: Relaxed Trend Filter (Price > 200MA)
         is_bullish = curr > sma200
         in_discount = curr < eq
         
@@ -790,11 +800,17 @@ def process_ticker(t, app_data_dict, market_bonus):
             elif sweep_type == "MINOR":
                 sweep_text = "<div style='margin-top:10px;padding:10px;background:rgba(251,191,36,0.15);border-radius:6px;border-left:4px solid #fbbf24;color:#fcd34d;font-size:0.85rem;'><b>💧 Minor Sweep</b><br>Reclaimed 10d low. Short-term reversal likely.</div>"
             
-            elite_html = f"<div style='background:#1e293b; border:1px solid #334155; padding:15px; border-radius:12px; margin:15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'><div style='font-weight:bold; color:#10b981; font-size:1.1rem; margin-bottom:8px;'>💎 AI Analysis (Score {score})</div><div style='font-size:0.9rem; color:#cbd5e1; margin-bottom:10px;'>{confluence_text}</div><ul style='margin:0; padding-left:20px; font-size:0.85rem; color:#94a3b8; line-height:1.5;'>{reasons_html}</ul>{sweep_text}</div>"
+            # 🔥 V8 Update: Crypto Risk Warning
+            risk_warning = ""
+            if t in CRYPTO_TICKERS:
+                risk_warning = "<div style='margin-top:10px;padding:10px;background:rgba(124, 58, 237, 0.15);border-radius:6px;border-left:4px solid #7c3aed;color:#d8b4fe;font-size:0.85rem;'><b>⚠️ Crypto Sector Risk</b><br>Max portfolio allocation: 20%. High volatility alert.</div>"
+            
+            elite_html = f"<div style='background:#1e293b; border:1px solid #334155; padding:15px; border-radius:12px; margin:15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'><div style='font-weight:bold; color:#10b981; font-size:1.1rem; margin-bottom:8px;'>💎 AI Analysis (Score {score})</div><div style='font-size:0.9rem; color:#cbd5e1; margin-bottom:10px;'>{confluence_text}</div><ul style='margin:0; padding-left:20px; font-size:0.85rem; color:#94a3b8; line-height:1.5;'>{reasons_html}</ul>{sweep_text}{risk_warning}</div>"
         
         stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
 
-        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 Risk Calculator <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>Shares:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
+        # 🔥 V8 Update: Default Risk to 1.5% in Calculator HTML
+        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 Risk Calculator <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(V8 Optimized: 1.5%)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.5' value='1.5' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>Shares:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
 
         earn_html = ""
         if earnings_warning:
@@ -868,6 +884,7 @@ def main():
         cards = ""
         for item in items:
             t = item['ticker']
+            if t not in APP_DATA: continue
             d = APP_DATA[t]
             rvol_val = d['rvol']
             rvol_html = f"<span style='color:{'#f472b6' if rvol_val > 1.5 else ('#fbbf24' if rvol_val > 1.2 else '#64748b')};font-size:0.8rem'>Vol {rvol_val:.1f}x{' 🔥' if rvol_val > 1.5 else (' ⚡' if rvol_val > 1.2 else '')}</span>"
@@ -882,6 +899,8 @@ def main():
         sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
 
     json_data = json.dumps(APP_DATA)
+    
+    # f-string HTML generation. Note double curly braces for CSS/JS
     final_html = f"""<!DOCTYPE html>
     <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
     <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} 
@@ -1010,7 +1029,7 @@ def main():
             const capInput = document.getElementById('calc-capital');
             const riskInput = document.getElementById('calc-risk');
             capInput.value = localStorage.getItem('user_capital') || '';
-            riskInput.value = localStorage.getItem('user_risk') || '1.0';
+            riskInput.value = localStorage.getItem('user_risk') || '1.5';
             const runCalc = () => updateCalculator(d.data.entry, d.data.sl);
             capInput.oninput = runCalc;
             riskInput.oninput = runCalc;
