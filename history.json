@@ -29,28 +29,28 @@
     "2026-01-09": [
         {
             "ticker": "DE",
-            "score": 229,
+            "score": 223,
             "sector": "\ud83c\udfed Industrials"
         },
         {
             "ticker": "V",
-            "score": 176,
+            "score": 168,
             "sector": "\ud83c\udfe6 Financials"
         },
         {
-            "ticker": "STLA",
-            "score": 156,
-            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
-        },
-        {
             "ticker": "GE",
-            "score": 154,
+            "score": 156,
             "sector": "\ud83c\udfed Industrials"
         },
         {
-            "ticker": "NET",
-            "score": 136,
-            "sector": "\ud83d\udcbb Tech & Software"
+            "ticker": "BABA",
+            "score": 133,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MA",
+            "score": 122,
+            "sector": "\ud83c\udfe6 Financials"
         }
     ]
 }
