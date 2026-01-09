@@ -38,7 +38,20 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main  # <--- 🔥 新增這行：先抓最新版，再合併
+          
+          # 1. 先把所有變動暫存起來
+          git add .
+          git stash
+          
+          # 2. 強制拉取最新版 (Rebase)
+          git pull --rebase origin main
+          
+          # 3. 把暫存的變動放回來 (如果有衝突，優先使用我們剛生成的)
+          git stash pop || echo "No stash to pop"
+          
+          # 4. 再次加入所有檔案並提交
           git add .
           git commit -m "Update daily stock data & history" || echo "No changes to commit"
+          
+          # 5. 推送
           git push origin main
