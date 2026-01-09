@@ -28,29 +28,29 @@
     ],
     "2026-01-09": [
         {
+            "ticker": "DE",
+            "score": 229,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "V",
+            "score": 176,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "STLA",
+            "score": 156,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
             "ticker": "GE",
             "score": 154,
             "sector": "\ud83c\udfed Industrials"
         },
         {
-            "ticker": "GOOGL",
-            "score": 134,
-            "sector": "\ud83d\udce1 Comms & Media"
-        },
-        {
-            "ticker": "TSLA",
-            "score": 124,
-            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
-        },
-        {
-            "ticker": "MU",
-            "score": 120,
-            "sector": "\u26a1 Semiconductors"
-        },
-        {
-            "ticker": "ABNB",
-            "score": 116,
-            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+            "ticker": "NET",
+            "score": 136,
+            "sector": "\ud83d\udcbb Tech & Software"
         }
     ]
 }
