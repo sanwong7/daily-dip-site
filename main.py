@@ -1,6 +1,5 @@
 import os
 import matplotlib
-# 1. 強制設定後台繪圖
 matplotlib.use('Agg') 
 import requests
 import yfinance as yf
@@ -10,41 +9,55 @@ import numpy as np
 import base64
 import json
 import time
-import random
 from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
+from collections import defaultdict
 
-# --- 0. 設定 ---
+# ==================== 設定 ====================
 API_KEY = os.environ.get("POLYGON_API_KEY")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
 HISTORY_FILE = "history.json"
+BACKTEST_FILE = "backtest_results.json"
 
-# --- 1. 自動化選股核心 ---
-
-PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "MARA", "TSM", "ASML", "ARM"]
+# ==================== 股票池 ====================
+PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI"]
 
 STATIC_UNIVERSE = [
-    "QCOM", "INTC", "MU", "AMAT", "LRCX", "ADI", "TXN", "KLAC", "MRVL", "STM", "ON", "GFS", "SMCI", "DELL", "HPQ",
-    "ORCL", "ADBE", "CRM", "SAP", "INTU", "IBM", "NOW", "UBER", "ABNB", "PANW", "SNPS", "CDNS", "CRWD", "SQ", "SHOP", "WDAY", "ROP", "SNOW", "DDOG", "ZS", "NET", "TEAM", "MDB", "PATH", "U", "APP", "RDDT", "IONQ",
-    "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "BLK", "C", "AXP", "PYPL", "AFRM", "UPST",
-    "WMT", "COST", "PG", "KO", "PEP", "MCD", "SBUX", "NKE", "DIS", "HD", "LOW", "TGT", "CMG", "LULU", "BKNG", "MAR", "HILTON", "CL",
-    "LLY", "JNJ", "UNH", "ABBV", "MRK", "TMO", "DHR", "ISRG", "VRTX", "REGN", "PFE", "AMGN", "BMY", "CVS", "HIMS",
-    "CAT", "DE", "GE", "HON", "UNP", "UPS", "XOM", "CVX", "COP", "SLB", "EOG", "OXY",
-    "TM", "HMC", "STLA", "F", "GM", "RIVN", "LCID", "NIO", "XPEV", "LI",
-    "BABA", "PDD", "JD", "BIDU", "TCEHY",
-    "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
+    "QCOM", "INTC", "MU", "AMAT", "LRCX", "ADI", "TXN", "KLAC", "MRVL", "ARM",
+    "ORCL", "ADBE", "CRM", "INTU", "IBM", "NOW", "UBER", "ABNB", "PANW", "CRWD",
+    "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "BLK", "PYPL",
+    "WMT", "COST", "PG", "KO", "MCD", "SBUX", "NKE", "DIS", "HD",
+    "LLY", "JNJ", "UNH", "ABBV", "TMO", "ISRG", "VRTX",
+    "CAT", "DE", "GE", "HON", "XOM", "CVX",
+    "TM", "F", "GM", "RIVN",
+    "BABA", "PDD", "JD",
+    "NFLX", "TMUS", "COIN", "MSTR"
 ]
 
-# --- 歷史紀錄管理模組 ---
+SECTOR_MAP = {
+    "Technology": "💻 科技與軟體",
+    "Communication Services": "📡 通訊與媒體",
+    "Consumer Cyclical": "🛍️ 非必需消費",
+    "Consumer Defensive": "🛒 必需消費",
+    "Financial Services": "🏦 金融服務",
+    "Healthcare": "💊 醫療保健",
+    "Energy": "🛢️ 能源",
+    "Industrials": "🏭 工業",
+    "Basic Materials": "🧱 原物料",
+    "Real Estate": "🏠 房地產",
+    "Utilities": "💡 公用事業"
+}
+
+# ==================== 歷史紀錄管理 ====================
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r") as f:
                 return json.load(f)
-        except: return {}
+        except: 
+            return {}
     return {}
 
 def save_history(history):
@@ -54,636 +67,593 @@ def save_history(history):
     except Exception as e:
         print(f"❌ Failed to save history: {e}")
 
-def generate_ticker_grid(picks, title, color_class="top-card"):
-    if not picks:
-        return f"<h3 style='color:#fbbf24; margin-top:30px;'>{title}</h3><div style='color:#666; margin-bottom:20px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px;'>暫無歷史數據</div>"
+# ==================== 🔥 新增：Order Block 識別 ====================
+def identify_order_blocks(df, lookback=30):
+    """識別真正嘅 Order Block (機構訂單區)"""
+    obs = []
+    if len(df) < lookback + 5:
+        return obs
     
-    html = f"<h3 style='color:#fbbf24; margin-top:30px;'>{title}</h3><div class='top-grid'>"
-    for p in picks:
-        ticker = p.get('ticker')
-        score = p.get('score', 0)
-        sector = p.get('sector', '')
-        style = "border-color:#fbbf24;" if color_class == "top-card" else "border:1px solid #475569; background:rgba(30,41,59,0.5); opacity: 0.9;"
-        
-        html += f"<div class='card {color_class}' onclick=\"openModal('{ticker}')\" style='{style}'>" \
-                f"<div style='font-size:1.2rem;margin-bottom:5px'><b>{ticker}</b></div>" \
-                f"<div style='color:{'#10b981' if score >= 80 else '#94a3b8'};font-weight:bold'>{score}</div>" \
-                f"<div style='font-size:0.7rem;color:#888'>{sector}</div></div>"
-    html += "</div>"
-    return html
-
-# -----------------------------------
-
-def calculate_beta(stock_returns, market_returns):
-    if len(market_returns) == 0: return 1.0
-    if len(stock_returns) != len(market_returns):
-        min_len = min(len(stock_returns), len(market_returns))
-        stock_returns = stock_returns[-min_len:]
-        market_returns = market_returns[-min_len:]
-    if len(market_returns) < 2: return 1.0 
-    try:
-        covariance = np.cov(stock_returns, market_returns)[0][1]
-        variance = np.var(market_returns)
-        if variance == 0: return 1.0
-        return covariance / variance
-    except: return 1.0
-
-SECTOR_MAP = {
-    "Technology": "💻 科技與軟體", "Communication Services": "📡 通訊與媒體", "Consumer Cyclical": "🛍️ 非必需消費 (循環)",
-    "Consumer Defensive": "🛒 必需消費 (防禦)", "Financial Services": "🏦 金融服務", "Healthcare": "💊 醫療保健",
-    "Energy": "🛢️ 能源", "Industrials": "🏭 工業", "Basic Materials": "🧱 原物料", "Real Estate": "🏠 房地產", "Utilities": "💡 公用事業"
-}
-
-def get_stock_sector(ticker):
-    try:
-        if ticker in ["NVDA", "AMD", "TSM", "INTC", "MU", "QCOM", "ASML"]: return "⚡ 半導體"
-        if ticker in ["AAPL", "MSFT", "GOOGL", "META", "CRM"]: return "💻 科技與軟體"
-        info = yf.Ticker(ticker).info
-        sector = info.get('sector', 'Unknown')
-        return SECTOR_MAP.get(sector, "🌐 其他產業")
-    except: return "🌐 其他產業"
-
-def auto_select_candidates():
-    print("🚀 啟動超級篩選器 (Priority First)...")
-    full_list = PRIORITY_TICKERS + list(set(STATIC_UNIVERSE) - set(PRIORITY_TICKERS))
-    valid_tickers = [] 
-    try:
-        spy = yf.Ticker("SPY").history(period="1y")
-        if spy.empty: 
-            print("⚠️ SPY fetch failed, proceeding with default beta.")
-            spy_returns = []
-        else:
-            spy_returns = spy['Close'].pct_change().dropna()
-    except: spy_returns = []
+    highs = df['High'].values
+    lows = df['Low'].values
+    closes = df['Close'].values
+    opens = df['Open'].values
+    volumes = df['Volume'].values
     
-    print(f"🔍 開始過濾...")
-    for ticker in full_list:
-        try:
-            time.sleep(random.uniform(0.1, 0.3))
-            
-            df = yf.Ticker(ticker).history(period="1y")
-            if df is None or len(df) < 200: continue
-            
-            close = df['Close'].iloc[-1]
-            sma200 = df['Close'].rolling(200).mean().iloc[-1]
-            if close < sma200: continue 
-            
-            avg_vol = df['Volume'].tail(30).mean()
-            avg_price = df['Close'].tail(30).mean()
-            dollar_vol = avg_vol * avg_price
-            if dollar_vol < 100_000_000: continue 
-            
-            stock_returns = df['Close'].pct_change().dropna()
-            beta = calculate_beta(stock_returns, spy_returns)
-            
-            sector_name = get_stock_sector(ticker)
-            print(f"   ✅ {ticker} 入選!")
-            valid_tickers.append({'ticker': ticker, 'sector': sector_name})
-        except: continue
-    print(f"🏆 篩選完成! 共找到 {len(valid_tickers)} 隻。")
-    return valid_tickers
-
-# --- 2. 新聞 ---
-def get_polygon_news():
-    if not API_KEY: return "<div style='padding:20px'>API Key Missing</div>"
-    news_html = ""
-    try:
-        url = f"https://api.polygon.io/v2/reference/news?limit=15&order=desc&sort=published_utc&apiKey={API_KEY}"
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-        if data.get('results'):
-            for item in data['results']:
-                title = item.get('title')
-                url = item.get('article_url')
-                pub = item.get('publisher', {}).get('name', 'Unknown')
-                dt = item.get('published_utc', '')[:10]
-                news_html += f"<div class='news-card'><div class='news-meta'><span class='news-source'>{pub}</span><span class='news-date'>{dt}</span></div><a href='{url}' target='_blank' class='news-title'>{title}</a></div>"
-        else: news_html = "<div style='padding:20px;text-align:center'>No News Found</div>"
-    except Exception as e: news_html = f"<div style='padding:20px'>News Error: {e}</div>"
-    return news_html
-
-# --- 3. 市場大盤分析 ---
-def get_market_condition():
-    try:
-        print("🔍 Checking Market (QQQ & SPY)...")
-        qqq = yf.Ticker("QQQ").history(period="6mo")
+    for i in range(lookback, len(df)-1):
+        # Bullish OB: 大陰線後出現強力反彈
+        body_size = abs(closes[i] - opens[i])
+        prev_body = abs(closes[i-1] - opens[i-1])
         
-        if qqq.empty: return "NEUTRAL", "數據不足", 0
+        # 陰線 + 放量
+        is_bearish = closes[i] < opens[i]
+        volume_spike = volumes[i] > np.mean(volumes[max(0, i-20):i]) * 1.3
         
-        qqq_ma20 = qqq['Close'].rolling(20).mean().iloc[-1]
-        qqq_curr = qqq['Close'].iloc[-1]
+        if is_bearish and body_size > prev_body * 0.8 and volume_spike:
+            # 檢查之後係咪強力反彈
+            if i+1 < len(closes):
+                next_move = closes[i+1] - closes[i]
+                if next_move > 0:  # 反彈
+                    strength = next_move / body_size if body_size > 0 else 0
+                    
+                    if strength > 0.5:  # 反彈至少 50% 陰線幅度
+                        obs.append({
+                            'type': 'bullish',
+                            'zone_low': lows[i],
+                            'zone_high': min(opens[i], closes[i]),
+                            'strength': strength,
+                            'index': i,
+                            'volume_ratio': volumes[i] / np.mean(volumes[max(0, i-20):i])
+                        })
+    
+    # 保留最強嘅 5 個 OB
+    obs.sort(key=lambda x: x['strength'] * x['volume_ratio'], reverse=True)
+    return obs[:5]
+
+# ==================== 🔥 新增：Market Structure Break 判斷 ====================
+def detect_market_structure_break(df, lookback=50):
+    """判斷市場結構突破 (BOS/CHoCH)"""
+    if len(df) < lookback:
+        return False, 0, "N/A"
+    
+    recent = df.tail(lookback)
+    swing_highs = []
+    swing_lows = []
+    
+    # 找出 Swing Points
+    for i in range(2, len(recent)-2):
+        if (recent['High'].iloc[i] > recent['High'].iloc[i-1] and 
+            recent['High'].iloc[i] > recent['High'].iloc[i-2] and
+            recent['High'].iloc[i] > recent['High'].iloc[i+1]):
+            swing_highs.append((i, recent['High'].iloc[i]))
         
-        is_bullish = qqq_curr > qqq_ma20
+        if (recent['Low'].iloc[i] < recent['Low'].iloc[i-1] and 
+            recent['Low'].iloc[i] < recent['Low'].iloc[i-2] and
+            recent['Low'].iloc[i] < recent['Low'].iloc[i+1]):
+            swing_lows.append((i, recent['Low'].iloc[i]))
+    
+    if len(swing_lows) < 2 or len(swing_highs) < 1:
+        return False, 0, "Insufficient Data"
+    
+    # 檢查係咪上升趨勢 (Higher Lows)
+    last_low = swing_lows[-1][1]
+    prev_low = swing_lows[-2][1]
+    
+    if last_low > prev_low:
+        # 檢查係咪破咗前高 (BOS)
+        last_high = swing_highs[-1][1]
+        current_price = recent['Close'].iloc[-1]
         
-        if is_bullish:
-            return "BULLISH", "🟢 市場順風 (QQQ > 20MA)", 5
-        else:
-            return "BEARISH", "🔴 市場逆風 (QQQ < 20MA - 停止接刀)", -10
+        if current_price > last_high:
+            breakout_strength = (current_price - last_high) / last_high * 100
+            return True, breakout_strength, "BOS (Break of Structure)"
+    
+    return False, 0, "No BOS"
+
+# ==================== 🔥 新增：多時間框架確認 ====================
+def multi_timeframe_confirmation(ticker):
+    """檢查多個時間週期係咪一致看多"""
+    try:
+        scores = 0
+        reasons = []
+        
+        # 4小時圖
+        df_4h = yf.Ticker(ticker).history(period="3mo", interval="1h")
+        if df_4h is not None and len(df_4h) > 50:
+            sma20_4h = df_4h['Close'].rolling(20).mean().iloc[-1]
+            if df_4h['Close'].iloc[-1] > sma20_4h:
+                scores += 10
+                reasons.append("⏰ 4H 趨勢確認")
+        
+        # 周線圖
+        df_w = yf.Ticker(ticker).history(period="1y", interval="1wk")
+        if df_w is not None and len(df_w) > 20:
+            sma10_w = df_w['Close'].rolling(10).mean().iloc[-1]
+            if df_w['Close'].iloc[-1] > sma10_w:
+                scores += 15
+                reasons.append("📅 周線看多")
+        
+        return scores, reasons
+    except:
+        return 0, []
+
+# ==================== 🔥 改進：更精準嘅 Sweep 判斷 ====================
+def calculate_smc_v2(df):
+    """SMC 核心計算 - 優化版"""
+    try:
+        window = 50
+        if len(df) < window:
+            last = float(df['Close'].iloc[-1])
+            return last*1.05, last*0.95, last, last, last*0.94, False, None
+        
+        recent = df.tail(window)
+        bsl = float(recent['High'].max())
+        ssl = float(recent['Low'].min())
+        eq = (bsl + ssl) / 2
+        
+        # 找尋 Swing Lows
+        swing_lows = []
+        for i in range(5, len(recent)-2):
+            if (recent['Low'].iloc[i] < recent['Low'].iloc[i-1] and
+                recent['Low'].iloc[i] < recent['Low'].iloc[i-2] and
+                recent['Low'].iloc[i] < recent['Low'].iloc[i+1]):
+                swing_lows.append((i, recent['Low'].iloc[i]))
+        
+        if not swing_lows:
+            return bsl, ssl, eq, eq, ssl*0.99, False, None
+        
+        # 檢查最近 5 根 K 線嘅 Sweep
+        last_5 = recent.tail(5)
+        sweep_type = None
+        best_entry = eq
+        last_swing = swing_lows[-1][1]
+        
+        for i in range(len(last_5)):
+            candle = last_5.iloc[i]
+            wick_length = abs(candle['Low'] - min(candle['Open'], candle['Close']))
+            body_size = abs(candle['Close'] - candle['Open'])
             
-    except: return "NEUTRAL", "Check Failed", 0
+            # 真正嘅 Sweep 條件：
+            # 1. 破位
+            # 2. 強力收回
+            # 3. 長下影線
+            # 4. 放量
+            broke_low = candle['Low'] < last_swing
+            closed_above = candle['Close'] > last_swing
+            long_wick = wick_length > body_size * 1.2
+            volume_confirm = candle['Volume'] > recent['Volume'].mean() * 1.15
+            
+            if broke_low and closed_above and long_wick and volume_confirm:
+                sweep_type = "MAJOR"
+                best_entry = last_swing * 1.003
+                break
+            elif broke_low and closed_above:
+                if sweep_type != "MAJOR":
+                    sweep_type = "MINOR"
+                    best_entry = last_swing * 1.002
+        
+        # FVG 檢測（更嚴格）
+        found_fvg = False
+        avg_range = (recent['High'] - recent['Low']).tail(20).mean()
+        
+        for i in range(3, len(recent)):
+            gap = recent['Low'].iloc[i] - recent['High'].iloc[i-2]
+            if gap > avg_range * 0.3:  # Gap 夠大
+                fvg_level = recent['High'].iloc[i-2]
+                if fvg_level < eq and not sweep_type:
+                    best_entry = fvg_level
+                    found_fvg = True
+                    break
+        
+        sl = ssl * 0.985  # SL 設在 SSL 下方 1.5%
+        
+        return bsl, ssl, eq, best_entry, sl, found_fvg, sweep_type
+        
+    except Exception as e:
+        print(f"SMC Error: {e}")
+        last = float(df['Close'].iloc[-1])
+        return last*1.05, last*0.95, last, last, last*0.94, False, None
 
-# --- 4. 數據獲取 ---
-def fetch_data_safe(ticker, period, interval):
-    try:
-        time.sleep(random.uniform(0.1, 0.2))
-        dat = yf.Ticker(ticker).history(period=period, interval=interval)
-        if dat is None or dat.empty: return None
-        if not isinstance(dat.index, pd.DatetimeIndex): dat.index = pd.to_datetime(dat.index)
-        dat = dat.rename(columns={"Open": "Open", "High": "High", "Low": "Low", "Close": "Close", "Volume": "Volume"})
-        return dat
-    except: return None
-
-def check_earnings(ticker):
-    try:
-        stock = yf.Ticker(ticker)
-        calendar = stock.calendar
-        if calendar is not None and not calendar.empty:
-            earnings_date = calendar.iloc[0, 0] 
-            if isinstance(earnings_date, (datetime, pd.Timestamp)):
-                days_diff = (earnings_date.date() - datetime.now().date()).days
-                if 0 <= days_diff <= 7:
-                    return f"⚠️ Earnings: {days_diff}d"
-    except: pass
-    return ""
-
-# --- 5. 技術指標 ---
+# ==================== 技術指標計算 ====================
 def calculate_indicators(df):
+    """計算技術指標"""
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
-    vol_ma = df['Volume'].rolling(10).mean()
+    
+    vol_ma = df['Volume'].rolling(20).mean()
     rvol = df['Volume'] / vol_ma
+    
     sma50 = df['Close'].rolling(50).mean()
     sma200 = df['Close'].rolling(200).mean()
+    
     golden_cross = False
-    if len(sma50) > 5:
+    if len(sma50) > 5 and not pd.isna(sma50.iloc[-1]) and not pd.isna(sma200.iloc[-1]):
         if sma50.iloc[-1] > sma200.iloc[-1] and sma50.iloc[-5] <= sma200.iloc[-5]:
             golden_cross = True
+    
     trend_bullish = sma50.iloc[-1] > sma200.iloc[-1] if len(sma200) > 0 else False
+    
     if len(df) > 30:
         perf_30d = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30] * 100
-    else: perf_30d = 0
+    else:
+        perf_30d = 0
+    
     return rsi, rvol, golden_cross, trend_bullish, perf_30d
 
-# --- 6. 評分系統 ---
-def calculate_quality_score(df, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators):
+# ==================== 🔥 改進：動態評分系統 ====================
+def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type, indicators):
+    """更精準嘅評分系統"""
     try:
-        score = 60 + market_bonus
+        score = 50 + market_bonus
         reasons = []
+        confluence_count = 0
+        
         rsi, rvol, golden_cross, trend, perf_30d = indicators
-        strategies = 0
         
+        # ===== 1. Order Block 確認 (+25分) =====
+        obs = identify_order_blocks(df)
+        if obs:
+            closest_ob = min(obs, key=lambda x: abs(entry - x['zone_high']))
+            distance_pct = abs(entry - closest_ob['zone_high']) / entry
+            
+            if distance_pct < 0.015:  # 1.5% 內
+                bonus = int(25 * closest_ob['strength'])
+                score += bonus
+                confluence_count += 1
+                reasons.append(f"💎 強力OB ({closest_ob['strength']:.2f}x 反彈)")
+        
+        # ===== 2. Market Structure Break (+20分) =====
+        has_bos, bos_strength, bos_type = detect_market_structure_break(df)
+        if has_bos:
+            score += 20
+            confluence_count += 1
+            reasons.append(f"🔥 {bos_type} (+{bos_strength:.1f}%)")
+        
+        # ===== 3. 多時間框架確認 (+15分) =====
+        mtf_score, mtf_reasons = multi_timeframe_confirmation(ticker)
+        if mtf_score > 0:
+            score += mtf_score
+            confluence_count += 1
+            reasons.extend(mtf_reasons)
+        
+        # ===== 4. Volume 分析 (改進) =====
+        curr_rvol = rvol.iloc[-1] if not pd.isna(rvol.iloc[-1]) else 1.0
+        recent_vol_trend = rvol.tail(5).mean()
+        
+        if curr_rvol > 2.5:
+            score += 20
+            confluence_count += 1
+            reasons.append(f"🚀 爆量 ({curr_rvol:.1f}x)")
+        elif curr_rvol > 1.8:
+            score += 15
+            confluence_count += 1
+            reasons.append(f"📊 強量 ({curr_rvol:.1f}x)")
+        elif curr_rvol > 1.3:
+            score += 8
+            reasons.append(f"📊 放量 ({curr_rvol:.1f}x)")
+        
+        # 持續放量加分
+        if recent_vol_trend > 1.5:
+            score += 5
+            reasons.append("🔥 持續放量")
+        
+        # ===== 5. Sweep 確認 (+20分) =====
         if sweep_type == "MAJOR":
-            strategies += 1; score += 25; reasons.append("🌊 強力獵殺 (Major Sweep)")
+            score += 25
+            confluence_count += 1
+            reasons.append("🌊 Major Sweep (強力獵殺)")
         elif sweep_type == "MINOR":
-            strategies += 1; score += 15; reasons.append("💧 短線獵殺 (Minor Sweep)")
+            score += 12
+            reasons.append("💧 Minor Sweep")
         
-        if golden_cross: strategies += 1
-        if 40 <= rsi.iloc[-1] <= 55: strategies += 1
-        
+        # ===== 6. R:R 分析（更嚴格）=====
         risk = entry - sl
         reward = tp - entry
         rr = reward / risk if risk > 0 else 0
-        if rr >= 3.0: score += 15; reasons.append(f"💰 盈虧比極佳 ({rr:.1f}R)")
-        elif rr >= 2.0: score += 10; reasons.append(f"💰 盈虧比優秀 ({rr:.1f}R)")
         
-        curr_rsi = rsi.iloc[-1]
-        if 40 <= curr_rsi <= 55: score += 10; reasons.append(f"📉 RSI 完美回調 ({int(curr_rsi)})")
-        elif curr_rsi > 70: score -= 15
+        if rr >= 4.0:
+            score += 20
+            confluence_count += 1
+            reasons.append(f"💰 超高R:R ({rr:.1f})")
+        elif rr >= 3.0:
+            score += 15
+            reasons.append(f"💰 優秀R:R ({rr:.1f})")
+        elif rr >= 2.5:
+            score += 8
+            reasons.append(f"💵 良好R:R ({rr:.1f})")
+        elif rr < 2.0:
+            score -= 15
+            reasons.append(f"⚠️ R:R不足 ({rr:.1f})")
         
-        curr_rvol = rvol.iloc[-1]
-        if curr_rvol > 1.5: score += 10; reasons.append(f"🔥 爆量確認 (Vol {curr_rvol:.1f}x)")
-        elif curr_rvol > 1.1: score += 5
+        # ===== 7. RSI 完美區間 =====
+        curr_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
         
-        if sweep_type: score += 20; reasons.append("💧 觸發流動性獵殺 (Sweep)")
-        if golden_cross: score += 10; reasons.append("✨ 出現黃金交叉")
+        if 35 <= curr_rsi <= 45:
+            score += 18
+            confluence_count += 1
+            reasons.append(f"🎯 RSI黃金區 ({int(curr_rsi)})")
+        elif 45 < curr_rsi <= 55:
+            score += 10
+            reasons.append(f"📉 RSI中性 ({int(curr_rsi)})")
+        elif curr_rsi < 30:
+            score += 8
+            reasons.append(f"⚠️ RSI超賣 ({int(curr_rsi)})")
+        elif curr_rsi > 70:
+            score -= 20
+            reasons.append(f"🔴 RSI超買 ({int(curr_rsi)})")
+        elif curr_rsi > 65:
+            score -= 10
         
-        dist_pct = abs(df['Close'].iloc[-1] - entry) / entry
-        if dist_pct < 0.01: score += 15; reasons.append("🎯 狙擊入場區")
-        if trend: score += 5; reasons.append("📈 長期趨勢向上")
+        # ===== 8. 價格與入場點距離 =====
+        curr_price = df['Close'].iloc[-1]
+        dist_pct = abs(curr_price - entry) / entry
         
-        if market_bonus > 0: reasons.append("🌍 大盤順風車 (+5)")
-        if market_bonus < 0: reasons.append("🌪️ 逆大盤風險 (-10)")
+        if dist_pct < 0.008:  # 0.8% 內
+            score += 18
+            reasons.append("🎯 完美狙擊點")
+        elif dist_pct < 0.02:
+            score += 10
+            reasons.append("✅ 入場點接近")
+        elif dist_pct > 0.05:
+            score -= 12
+            reasons.append(f"⚠️ 入場點太遠 ({dist_pct*100:.1f}%)")
         
-        return max(int(score), 0), reasons, rr, rvol.iloc[-1], perf_30d, strategies
-    except: return 50, [], 0, 0, 0, 0
-
-# --- 7. SMC 運算 (🔥 已修正：完全對齊 Backtest 邏輯) ---
-def calculate_smc(df):
-    try:
-        window = 50
-        recent = df.tail(window)
-        bsl = float(recent['High'].max())
-        ssl_long = float(recent['Low'].min())
-        eq = (bsl + ssl_long) / 2
+        # ===== 9. 趨勢確認 =====
+        if trend:
+            score += 8
+            reasons.append("📈 長期趨勢向上")
         
-        # 預設值
-        best_entry = eq
-        sweep_low = ssl_long # 預設止蝕
+        if golden_cross:
+            score += 12
+            confluence_count += 1
+            reasons.append("✨ 黃金交叉")
         
-        found_fvg = False
-        sweep_type = None 
+        # ===== 10. 動能分析（新增）=====
+        if len(df) > 5:
+            recent_momentum = (df['Close'].iloc[-1] - df['Close'].iloc[-5]) / df['Close'].iloc[-5] * 100
+            if recent_momentum > 3:
+                score += 10
+                reasons.append(f"⚡ 強勁動能 (+{recent_momentum:.1f}%)")
+            elif recent_momentum < -5:
+                score -= 8
+                reasons.append(f"📉 動能轉弱 ({recent_momentum:.1f}%)")
         
-        # --- Backtest 核心邏輯對齊 ---
-        # 邏輯：跌破 20日低點 且 收盤收回
-        # 檢查順序：由新到舊，優先捕捉最近的訊號
+        # ===== 11. 市場狀態調整 =====
+        if market_bonus > 0:
+            reasons.append("🌍 大盤順風 (+5)")
+        elif market_bonus < 0:
+            reasons.append("⚠️ 大盤逆風 (-10)")
         
-        last_3 = recent.tail(3)
-        prior_data = recent.iloc[:-3]
+        # ===== 12. 策略共振獎勵 =====
+        if confluence_count >= 4:
+            score += 15
+            reasons.append(f"🔥 {confluence_count}個強勢共振")
+        elif confluence_count >= 3:
+            score += 8
         
-        # 定義支撐線 (過去 20 日最低，不包含當前這幾根)
-        low_20d = prior_data['Low'].tail(20).min()
+        return max(int(score), 0), reasons, rr, curr_rvol, perf_30d, confluence_count
         
-        for i in range(len(last_3)):
-            candle = last_3.iloc[i]
-            
-            # 🔥 BACKTEST 條件：Low 跌破 Low_20d 且 Close 站回 Low_20d
-            if candle['Low'] < low_20d and candle['Close'] > low_20d:
-                sweep_type = "MAJOR"
-                best_entry = float(candle['Close']) # ALIGN 1: 收盤價進場 (Market on Close)
-                sweep_low = float(candle['Low'])    # ALIGN 2: 止蝕設在該K線最低點
-                
-                # 找到最新訊號就停止，模擬實戰當下反應
-                # 注意：這裡如果是回測程式，會遍歷所有歷史。
-                # 這裡是 Screener，我們只關心最近有沒有觸發。
-                
-        # 輔助：FVG 檢測 (次要)
-        if not sweep_type:
-            for i in range(2, len(recent)):
-                if recent['Low'].iloc[i] > recent['High'].iloc[i-2]:
-                    fvg = float(recent['Low'].iloc[i])
-                    if fvg < eq:
-                        best_entry = fvg
-                        sweep_low = ssl_long # FVG 還是用寬止蝕
-                        found_fvg = True
-                        break
-
-        return bsl, ssl_long, eq, best_entry, sweep_low*0.99, found_fvg, sweep_type
-    except:
-        last = float(df['Close'].iloc[-1])
-        return last*1.05, last*0.95, last, last, last*0.94, False, None
-
-# --- 8. 繪圖核心 ---
-def create_error_image(msg):
-    fig, ax = plt.subplots(figsize=(5, 3))
-    fig.patch.set_facecolor('#1e293b')
-    ax.set_facecolor('#1e293b')
-    ax.text(0.5, 0.5, msg, color='white', ha='center', va='center')
-    ax.axis('off')
-    buf = BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight', facecolor='#1e293b')
-    plt.close(fig)
-    buf.seek(0)
-    return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
-
-def generate_chart(df, ticker, title, entry, sl, tp, is_wait, sweep_type):
-    try:
-        plt.close('all')
-        if df is None or len(df) < 5: return create_error_image("No Data")
-        plot_df = df.tail(80).copy()
-        
-        entry = float(entry) if not np.isnan(entry) else plot_df['Close'].iloc[-1]
-        sl = float(sl) if not np.isnan(sl) else plot_df['Low'].min()
-        tp = float(tp) if not np.isnan(tp) else plot_df['High'].max()
-        
-        mc = mpf.make_marketcolors(up='#22c55e', down='#ef4444', edge='inherit', wick='inherit', volume={'up':'#334155', 'down':'#334155'})
-        s  = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#334155', facecolor='#1e293b')
-        
-        fig, axlist = mpf.plot(plot_df, type='candle', style=s, volume=True, mav=(50, 200), 
-            title=dict(title=f"{ticker} - {title}", color='white', size=16, weight='bold'), 
-            figsize=(8, 5), panel_ratios=(6, 2), 
-            scale_width_adjustment=dict(candle=1.2), 
-            returnfig=True, tight_layout=True)
-        
-        fig.patch.set_facecolor('#1e293b')
-        ax = axlist[0]; x_min, x_max = ax.get_xlim()
-        
-        if sweep_type:
-            lowest = plot_df['Low'].min()
-            label_text = "🌊 MAJOR SWEEP" if sweep_type == "MAJOR" else "💧 MINOR SWEEP"
-            label_color = "#ef4444" if sweep_type == "MAJOR" else "#fbbf24" 
-            ax.annotate(label_text, xy=(x_max-3, lowest), xytext=(x_max-10, lowest*0.98), 
-                        arrowprops=dict(facecolor=label_color, shrink=0.05), 
-                        color=label_color, fontsize=11, fontweight='bold', ha='center')
-        
-        line_style = ':' if is_wait else '-'
-        ax.axhline(tp, color='#22c55e', linestyle=line_style, linewidth=1.5, alpha=0.8)
-        ax.axhline(entry, color='#3b82f6', linestyle=line_style, linewidth=1.5, alpha=0.9)
-        ax.axhline(sl, color='#ef4444', linestyle=line_style, linewidth=1.5, alpha=0.8)
-        
-        ax.text(x_min+1, tp, " TP", color='#22c55e', fontsize=10, va='bottom', fontweight='bold')
-        ax.text(x_min+1, entry, " ENTRY", color='#3b82f6', fontsize=10, va='bottom', fontweight='bold')
-        ax.text(x_min+1, sl, " SL", color='#ef4444', fontsize=10, va='top', fontweight='bold')
-        
-        if not is_wait:
-            ax.add_patch(patches.Rectangle((x_min, entry), x_max-x_min, tp-entry, linewidth=0, facecolor='#22c55e', alpha=0.08))
-            ax.add_patch(patches.Rectangle((x_min, sl), x_max-x_min, entry-sl, linewidth=0, facecolor='#ef4444', alpha=0.08))
-        
-        buf = BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1, facecolor='#1e293b', edgecolor='none', dpi=100)
-        plt.close(fig)
-        buf.seek(0)
-        return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
-    except Exception as e: 
-        print(f"Plot Error: {e}")
-        return create_error_image("Plot Error")
-
-# --- 9. Discord 通知 ---
-def send_discord_alert(results):
-    if not DISCORD_WEBHOOK: return
-    top_picks = [r for r in results if r['score'] >= 85 and r['signal'] == "LONG"][:3]
-    if not top_picks: return
-    embeds = []
-    for pick in top_picks:
-        data = pick['data']
-        embed = {
-            "title": f"🚀 {pick['ticker']} - Potential Long Setup",
-            "description": f"**Score: {pick['score']}** | Vol: {data['rvol']:.1f}x",
-            "color": 5763717,
-            "fields": [
-                {"name": "Entry", "value": f"${data['entry']:.2f}", "inline": True},
-                {"name": "Stop Loss", "value": f"${data['sl']:.2f}", "inline": True},
-                {"name": "Status", "value": "✅ LONG", "inline": True}
-            ],
-            "footer": {"text": "Daily Dip Pro"}
-        }
-        embeds.append(embed)
-    try: requests.post(DISCORD_WEBHOOK, json={"username": "Daily Dip Bot", "embeds": embeds})
-    except: pass
-
-# --- 10. 單一股票處理 ---
-def process_ticker(t, app_data_dict, market_bonus):
-    try:
-        df_d = fetch_data_safe(t, "1y", "1d")
-        if df_d is None or len(df_d) < 50: return None
-        df_h = fetch_data_safe(t, "1mo", "1h")
-        if df_h is None or df_h.empty: df_h = df_d
-        curr = float(df_d['Close'].iloc[-1])
-        sma200 = float(df_d['Close'].rolling(200).mean().iloc[-1])
-        if pd.isna(sma200): sma200 = curr
-        
-        # 🔥 修改：使用 Backtest 對齊版 SMC
-        bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc(df_d)
-        tp = bsl
-        
-        earnings_warning = check_earnings(t) 
-        
-        # 嚴格的趨勢判斷
-        is_bullish = curr > sma200
-        in_discount = curr < eq
-        
-        wait_reason = ""
-        signal = "WAIT"
-        
-        # 🔥 邏輯：
-        # 1. 必須在 200MA 之上 (Bullish Trend)
-        # 2. 必須有 Sweep 訊號 (Low < 20d_Low & Close > 20d_Low)
-        
-        if not is_bullish: wait_reason = "📉 逆勢"
-        elif market_bonus < 0: wait_reason = "⚠️ 大盤不佳" 
-        elif not sweep_type: wait_reason = "💤 無訊號"
-        else:
-            signal = "LONG"
-            wait_reason = ""
-
-        indicators = calculate_indicators(df_d)
-        score, reasons, rr, rvol, perf_30d, strategies = calculate_quality_score(df_d, entry, sl, tp, is_bullish, market_bonus, sweep_type, indicators)
-        
-        is_wait = (signal == "WAIT")
-        img_d = generate_chart(df_d, t, "Daily SMC", entry, sl, tp, is_wait, sweep_type)
-        img_h = generate_chart(df_h, t, "Hourly Entry", entry, sl, tp, is_wait, sweep_type)
-        
-        stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
-        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 風控計算器 <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>建議股數:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0 股</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
-
-        earn_html = ""
-        if earnings_warning:
-            earn_html = f"<div style='background:rgba(239,68,68,0.2); color:#fca5a5; padding:8px; border-radius:6px; font-weight:bold; margin-bottom:10px; text-align:center; border:1px solid #ef4444;'>💣 {earnings_warning}</div>"
-
-        elite_html = ""
-        if score >= 85:
-             reasons_html = "".join([f"<li style='margin-bottom:4px;'>✅ {r}</li>" for r in reasons])
-             elite_html = f"<div style='background:#1e293b; border:1px solid #334155; padding:15px; border-radius:12px; margin:15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'><div style='font-weight:bold; color:#10b981; font-size:1.1rem; margin-bottom:8px;'>💎 AI 戰略分析 (Score {score})</div><ul style='margin:0; padding-left:20px; font-size:0.85rem; color:#94a3b8; line-height:1.5;'>{reasons_html}</ul></div>"
-
-        if signal == "LONG":
-            ai_html = f"<div class='deploy-box long' style='border:none; padding:0;'><div class='deploy-title' style='color:#10b981; font-size:1.3rem; margin-bottom:15px;'>✅ LONG SETUP</div>{earn_html}{stats_dashboard}{elite_html}{calculator_html}<div style='background:#1e293b; padding:12px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-family:monospace; color:#cbd5e1;'><span>🔵 Entry: ${entry:.2f}</span><span style='color:#ef4444;'>🔴 SL: ${sl:.2f}</span></div></div>"
-        else:
-            ai_html = f"<div class='deploy-box wait' style='background:#1e293b; border:1px solid #555;'><div class='deploy-title' style='color:#94a3b8;'>⏳ WAIT: {wait_reason}</div>{earn_html}<div style='padding:10px; color:#cbd5e1;'>目前不建議進場，因為：{wait_reason}</div></div>"
-            
-        app_data_dict[t] = {"signal": signal, "wait_reason": wait_reason, "deploy": ai_html, "img_d": img_d, "img_h": img_h, "score": score, "rvol": rvol, "entry": entry, "sl": sl}
-        return {"ticker": t, "sector": get_stock_sector(t), "price": curr, "signal": signal, "wait_reason": wait_reason, "score": score, "rvol": rvol, "perf": perf_30d, "data": {"entry": entry, "sl": sl, "rvol": rvol}, "earn": earnings_warning}
     except Exception as e:
-        print(f"Err {t}: {e}")
+        print(f"Scoring Error: {e}")
+        return 50, ["❌ 評分錯誤"], 0, 1.0, 0, 0
+
+# ==================== 🔥 完整回測系統 ====================
+def comprehensive_backtest(ticker, lookback_days=180, holding_days=5):
+    """完整回測單一股票策略表現"""
+    try:
+        print(f"📊 回測 {ticker}...")
+        
+        # 取得歷史數據
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=lookback_days + 60)
+        df = yf.Ticker(ticker).history(start=start_date, end=end_date, interval="1d")
+        
+        if df is None or len(df) < 100:
+            return None
+        
+        trades = []
+        equity_curve = [10000]  # 起始資金
+        current_equity = 10000
+        
+        # 模擬每10天生成一次訊號
+        for i in range(60, len(df) - holding_days, 10):
+            historical_df = df.iloc[:i+1]
+            
+            # 執行 SMC 策略
+            bsl, ssl, eq, entry, sl, found_fvg, sweep_type = calculate_smc_v2(historical_df)
+            
+            # 檢查入場條件
+            curr_price = historical_df['Close'].iloc[-1]
+            sma200 = historical_df['Close'].rolling(200).mean().iloc[-1]
+            
+            if pd.isna(sma200):
+                continue
+            
+            is_bullish = curr_price > sma200
+            in_discount = curr_price < eq
+            
+            # 必須符合基本條件
+            if not (is_bullish and in_discount and (found_fvg or sweep_type)):
+                continue
+            
+            # 計算指標
+            indicators = calculate_indicators(historical_df)
+            
+            # 計算評分（用舊的市場狀態作參考）
+            score, reasons, rr, rvol, perf_30d, conf = calculate_advanced_score(
+                ticker, historical_df, entry, sl, bsl, 0, sweep_type, indicators
+            )
+            
+            # 只取高分訊號
+            if score < 75:
+                continue
+            
+            # 模擬入場
+            entry_price = curr_price  # 假設以當前價入場
+            sl_price = sl
+            tp_price = bsl
+            
+            # 風險管理：每次risque 1%
+            risk_amount = current_equity * 0.01
+            risk_per_share = entry_price - sl_price
+            
+            if risk_per_share <= 0:
+                continue
+            
+            position_size = int(risk_amount / risk_per_share)
+            if position_size <= 0:
+                continue
+            
+            # 檢查後續價格走勢
+            future_df = df.iloc[i+1:i+1+holding_days]
+            
+            if len(future_df) == 0:
+                continue
+            
+            hit_sl = (future_df['Low'] <= sl_price).any()
+            hit_tp = (future_df['High'] >= tp_price).any()
+            
+            # 判斷結果
+            exit_price = entry_price
+            result = "OPEN"
+            pnl = 0
+            
+            if hit_sl and hit_tp:
+                # 兩個都打到，睇邊個先
+                sl_day = future_df[future_df['Low'] <= sl_price].index[0]
+                tp_day = future_df[future_df['High'] >= tp_price].index[0]
+                
+                if sl_day < tp_day:
+                    result = "LOSS"
+                    exit_price = sl_price
+                else:
+                    result = "WIN"
+                    exit_price = tp_price
+            elif hit_sl:
+                result = "LOSS"
+                exit_price = sl_price
+            elif hit_tp:
+                result = "WIN"
+                exit_price = tp_price
+            else:
+                # 持有期結束仍未觸及，以最後價格平倉
+                exit_price = future_df['Close'].iloc[-1]
+                if exit_price > entry_price:
+                    result = "WIN"
+                else:
+                    result = "LOSS"
+            
+            # 計算損益
+            pnl = (exit_price - entry_price) * position_size
+            current_equity += pnl
+            equity_curve.append(current_equity)
+            
+            trades.append({
+                'date': historical_df.index[-1].strftime('%Y-%m-%d'),
+                'ticker': ticker,
+                'entry': entry_price,
+                'sl': sl_price,
+                'tp': tp_price,
+                'exit': exit_price,
+                'shares': position_size,
+                'result': result,
+                'pnl': pnl,
+                'score': score,
+                'rr': rr,
+                'sweep': sweep_type or "FVG"
+            })
+        
+        if len(trades) == 0:
+            return None
+        
+        # 計算統計數據
+        wins = [t for t in trades if t['result'] == 'WIN']
+        losses = [t for t in trades if t['result'] == 'LOSS']
+        
+        total_trades = len(trades)
+        win_count = len(wins)
+        loss_count = len(losses)
+        win_rate = (win_count / total_trades * 100) if total_trades > 0 else 0
+        
+        total_pnl = sum([t['pnl'] for t in trades])
+        avg_win = np.mean([t['pnl'] for t in wins]) if wins else 0
+        avg_loss = np.mean([t['pnl'] for t in losses]) if losses else 0
+        
+        profit_factor = abs(sum([t['pnl'] for t in wins]) / sum([t['pnl'] for t in losses])) if losses and sum([t['pnl'] for t in losses]) != 0 else 0
+        
+        # 計算最大回撤
+        peak = equity_curve[0]
+        max_dd = 0
+        for val in equity_curve:
+            if val > peak:
+                peak = val
+            dd = (peak - val) / peak * 100
+            if dd > max_dd:
+                max_dd = dd
+        
+        return {
+            'ticker': ticker,
+            'total_trades': total_trades,
+            'wins': win_count,
+            'losses': loss_count,
+            'win_rate': win_rate,
+            'total_pnl': total_pnl,
+            'avg_win': avg_win,
+            'avg_loss': avg_loss,
+            'profit_factor': profit_factor,
+            'final_equity': current_equity,
+            'return_pct': (current_equity - 10000) / 10000 * 100,
+            'max_drawdown': max_dd,
+            'trades': trades,
+            'equity_curve': equity_curve
+        }
+        
+    except Exception as e:
+        print(f"❌ Backtest error for {ticker}: {e}")
         return None
 
-# --- 11. 主程式 ---
-def main():
-    print("🚀 啟動超級篩選器 (Priority First)...")
-    weekly_news_html = get_polygon_news()
-    market_status, market_text, market_bonus = get_market_condition()
-    market_color = "#10b981" if market_status == "BULLISH" else ("#ef4444" if market_status == "BEARISH" else "#fbbf24")
+def run_portfolio_backtest(tickers, lookback_days=180):
+    """批量回測多隻股票"""
+    print("=" * 60)
+    print("🚀 開始完整回測系統")
+    print("=" * 60)
     
-    APP_DATA, screener_rows_list = {}, []
-    candidates_data = auto_select_candidates()
-    processed_results = []
+    results = []
     
-    for item in candidates_data:
-        t = item['ticker']
-        res = process_ticker(t, APP_DATA, market_bonus)
-        if res:
-            if res['signal'] == "LONG": screener_rows_list.append(res)
-            processed_results.append(res)
-            
-    processed_results.sort(key=lambda x: x['score'], reverse=True)
+    for ticker in tickers:
+        result = comprehensive_backtest(ticker, lookback_days)
+        if result:
+            results.append(result)
+        time.sleep(0.5)  # 避免 API 限制
     
-    # 歷史紀錄
-    history = load_history()
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    day_before_str = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
-
-    top_5_today = []
-    for r in processed_results[:5]:
-        top_5_today.append({"ticker": r['ticker'], "score": r['score'], "sector": r['sector']})
-    history[today_str] = top_5_today
-    save_history(history)
-
-    yesterday_picks = history.get(yesterday_str, [])
-    day_before_picks = history.get(day_before_str, [])
-
-    send_discord_alert(processed_results)
-
-    top_5_html = generate_ticker_grid(top_5_today, "🏆 Today's Top 5")
-    yesterday_html = generate_ticker_grid(yesterday_picks, f"🥈 Yesterday ({yesterday_str})", "top-card")
-    day_before_html = generate_ticker_grid(day_before_picks, f"🥉 Day Before ({day_before_str})", "top-card")
-
-    sector_groups = {}
-    for item in processed_results:
-        sec = item['sector']
-        if sec not in sector_groups: sector_groups[sec] = []
-        sector_groups[sec].append(item)
-        
-    sector_html_blocks = ""
-    for sec_name, items in sector_groups.items():
-        items.sort(key=lambda x: x['score'], reverse=True)
-        cards = ""
-        for item in items:
-            t = item['ticker']
-            d = APP_DATA[t]
-            rvol_val = d['rvol']
-            rvol_str = f"Vol {rvol_val:.1f}x"
-            rvol_html = f"<span style='color:#f472b6;font-weight:bold;font-size:0.8rem'>{rvol_str} 🔥</span>" if rvol_val > 1.5 else f"<span style='color:#64748b;font-size:0.75rem'>{rvol_str}</span>"
-            badge_html = "<span class='badge b-long'>LONG</span>" if d['signal'] == 'LONG' else f"<span class='badge b-wait' style='font-size:0.65rem'>{d['wait_reason']}</span>"
-            earn_badge = f"<span style='color:#ef4444;font-weight:bold;font-size:0.7rem;margin-right:5px;'>{item['earn']}</span>" if item['earn'] else ""
-            cards += f"<div class='card' onclick=\"openModal('{t}')\"><div class='head'><div><div class='code'>{t}</div></div><div style='text-align:right'>{badge_html}</div></div><div style='display:flex;justify-content:space-between;align-items:center;margin-top:5px'><span>{earn_badge}<span style='font-size:0.8rem;color:{('#10b981' if d['score']>=85 else '#3b82f6')}'>Score {d['score']}</span></span>{rvol_html}</div></div>"
-        sector_html_blocks += f"<h3 class='sector-title'>{sec_name}</h3><div class='grid'>{cards}</div>"
-
-    json_str = json.dumps(APP_DATA)
-    b64_data = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
-
-    final_html = f"""<!DOCTYPE html>
-    <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3310/3310624.png"><title>DailyDip Pro</title>
-    <style>:root {{ --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --acc:#3b82f6; --g:#10b981; --r:#ef4444; --y:#fbbf24; }} body {{ background:var(--bg); color:var(--text); font-family:sans-serif; margin:0; padding:10px; }} .tabs {{ display:flex; gap:10px; overflow-x:auto; border-bottom:1px solid #333; padding-bottom:10px; }} .tab {{ padding:8px 16px; background:#334155; border-radius:6px; cursor:pointer; font-weight:bold; white-space:nowrap; }} .tab.active {{ background:var(--acc); }} .content {{ display:none; }} .content.active {{ display:block; }} .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }} .card {{ background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); border:1px solid #333; border-radius:12px; padding:12px; cursor:pointer; }} .top-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px; overflow-x:auto; }} .top-card {{ text-align:center; min-width:100px; }} 
-    .modal {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99; justify-content:center; overflow-y:auto; padding:10px; backdrop-filter: blur(5px); }} 
-    .m-content {{ background:#1e293b; width:100%; max-width:600px; padding:20px; margin-top:40px; border-radius:16px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }} 
-    #chart-d, #chart-h {{ width: 100%; min-height: 300px; background: #1e293b; display: flex; align-items: center; justify-content: center; }}
-    #chart-d img, #chart-h img {{ width: 100% !important; height: auto !important; display: block; border-radius: 8px; }}
-    .sector-title {{ border-left:4px solid var(--acc); padding-left:10px; margin:20px 0 10px; }} table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:8px; border-bottom:1px solid #333; text-align:left; }} .badge {{ padding:4px 8px; border-radius:6px; font-weight:bold; font-size:0.75rem; }} .b-long {{ color:var(--g); border:1px solid var(--g); background:rgba(16,185,129,0.2); }} .b-wait {{ color:#94a3b8; border:1px solid #555; }} .market-bar {{ background:#1e293b; padding:10px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; border:1px solid #333; }} 
-    .macro-grid {{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:15px; height: 120px; }}
-    .macro-card {{ width: 100%; height: 100%; }}
-    .news-card {{ background:var(--card); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:10px; }}
-    .news-title {{ font-size:1rem; font-weight:bold; color:var(--text); text-decoration:none; display:block; margin-top:5px; }}
-    .news-meta {{ font-size:0.75rem; color:#94a3b8; display:flex; justify-content:space-between; }}
-    @media (max-width: 600px) {{ .top-grid, .macro-grid {{ grid-template-columns: repeat(2, 1fr); }} }}</style></head>
-    <body>
-    <div class="tradingview-widget-container" style="margin-bottom:15px">
-      <div class="tradingview-widget-container__widget"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
-      {{
-      "symbols": [{{"proName": "FOREXCOM:SPXUSD", "title": "S&P 500"}},{{"proName": "FOREXCOM:NSXUSD", "title": "US 100"}},{{"proName": "FX_IDC:EURUSD", "title": "EUR/USD"}},{{"proName": "BITSTAMP:BTCUSD", "title": "Bitcoin"}},{{"proName": "BITSTAMP:ETHUSD", "title": "Ethereum"}}],
-      "showSymbolLogo": true, "colorTheme": "dark", "isTransparent": false, "displayMode": "adaptive", "locale": "en"
-      }}
-      </script>
-    </div>
-    <div class="market-bar" style="border-left:4px solid {market_color}"><div>{ "🟢" if market_status=="BULLISH" else "🔴" }</div><div><b>Market: {market_status}</b><div style="font-size:0.8rem;color:#94a3b8">{market_text}</div></div></div>
+    if not results:
+        print("❌ 無回測結果")
+        return None
     
-    <div class="macro-grid">
-        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "CBOE:VIX","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
-        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "BINANCE:BTCUSDT","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
-        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "TVC:DXY","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
-        <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>{{"symbol": "TVC:US10Y","width": "100%","height": "100%","locale": "en","dateRange": "1M","colorTheme": "dark","isTransparent": true,"autosize": true,"largeChartUrl": ""}}</script></div>
-    </div>
-
-    {top_5_html}
-    {yesterday_html}
-    {day_before_html}
-
-    <div class="tabs"><div class="tab active" onclick="setTab('overview',this)">📊 板塊分類</div><div class="tab" onclick="setTab('news',this)">📰 News</div></div>
+    # 儲存詳細結果
+    with open(BACKTEST_FILE, 'w') as f:
+        json.dump(results, f, indent=4)
     
-    <div id="overview" class="content active">
-        {sector_html_blocks if sector_html_blocks else "<div style='text-align:center;padding:30px;color:#666'>今日市場極度冷清，無符合嚴格條件的股票 🐻</div>"}
-        
-        <h3 style="margin-top:40px; border-bottom:1px solid #333; padding-bottom:10px;">📅 財經日曆 (Economic Calendar)</h3>
-        <div class="tradingview-widget-container" style="height:400px">
-          <div class="tradingview-widget-container__widget"></div>
-          <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
-          {{
-          "colorTheme": "dark", "isTransparent": true, "width": "100%", "height": "100%", "locale": "en", "importanceFilter": "-1,0,1", "currencyFilter": "USD"
-          }}
-          </script>
-        </div>
-    </div>
-
-    <div id="news" class="content">{weekly_news_html}</div>
-    <div style="text-align:center;color:#666;margin-top:30px;font-size:0.8rem">Updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>
+    # 生成報告
+    generate_backtest_report(results)
     
-    <div id="modal" class="modal" onclick="this.style.display='none'">
-        <div class="m-content" onclick="event.stopPropagation()">
-            <div style="display:flex;justify-content:space-between;margin-bottom:15px;align-items:center;">
-                <h2 id="m-ticker" style="margin:0; font-size:2rem; font-weight:800;"></h2>
-                <div id="btn-area"></div>
-            </div>
-            <div id="m-deploy"></div>
-            <div style="margin-top:20px;">
-                <div style="font-weight:bold;color:#cbd5e1;margin-bottom:5px;">Daily SMC</div>
-                <div id="chart-d"></div>
-            </div>
-            <div style="margin-top:15px;">
-                <div style="font-weight:bold;color:#cbd5e1;margin-bottom:5px;">Hourly Entry</div>
-                <div id="chart-h"></div>
-            </div>
-            <button onclick="document.getElementById('modal').style.display='none'" style="width:100%;padding:15px;background:#334155;border:none;color:white;border-radius:8px;margin-top:20px;font-weight:bold;cursor:pointer;">Close</button>
-        </div>
-    </div>
+    return results
 
-    <script>
-    const rawData = "{b64_data}";
-    const DATA = JSON.parse(atob(rawData));
-
-    function setTab(id,el){{document.querySelectorAll('.content').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}}
+def generate_backtest_report(results):
+    """生成回測報告"""
+    print("\n" + "=" * 60)
+    print("📊 回測報告")
+    print("=" * 60)
     
-    function updateCalculator(entry, sl) {{
-        const cap = parseFloat(document.getElementById('calc-capital').value) || 0;
-        const risk = parseFloat(document.getElementById('calc-risk').value) || 0;
-        const resultEl = document.getElementById('calc-result');
-        localStorage.setItem('user_capital', cap);
-        localStorage.setItem('user_risk', risk);
-        if (cap > 0 && risk > 0 && entry > 0 && sl > 0 && entry > sl) {{
-            const riskAmount = cap * (risk / 100);
-            const riskPerShare = entry - sl;
-            const shares = Math.floor(riskAmount / riskPerShare);
-            resultEl.innerText = shares + " 股";
-            resultEl.style.color = "#fbbf24";
-        }} else {{
-            resultEl.innerText = "---";
-            resultEl.style.color = "#64748b";
-        }}
-    }}
-
-    function openModal(t){{
-        const d=DATA[t];if(!d)return;
-        document.getElementById('modal').style.display='flex';
-        document.getElementById('m-ticker').innerText=t;
-        document.getElementById('m-deploy').innerHTML=d.deploy;
-        document.getElementById('chart-d').innerHTML='<img src="'+d.img_d+'" style="width:100%; display:block;">';
-        document.getElementById('chart-h').innerHTML='<img src="'+d.img_h+'" style="width:100%; display:block;">';
-        
-        const btnArea=document.getElementById('btn-area'); btnArea.innerHTML='';
-        const tvBtn=document.createElement('button'); tvBtn.innerText='📈 Chart';
-        tvBtn.style.cssText='background:#2563eb;border:none;color:white;padding:8px 16px;border-radius:6px;font-weight:bold;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);';
-        
-        tvBtn.onclick = function() {{
-            const currentTicker = document.getElementById('m-ticker').innerText;
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            
-            if (isMobile) {{
-                window.location.href = 'tradingview://chart?symbol=' + currentTicker;
-                setTimeout(() => {{
-                    window.location.href = 'https://www.tradingview.com/chart/?symbol=' + currentTicker;
-                }}, 1500);
-            }} else {{
-                window.open('https://www.tradingview.com/chart/?symbol=' + currentTicker, '_blank');
-            }}
-        }};
-        btnArea.appendChild(tvBtn);
-
-        if (d.signal === "LONG") {{
-            const capInput = document.getElementById('calc-capital');
-            const riskInput = document.getElementById('calc-risk');
-            capInput.value = localStorage.getItem('user_capital') || '';
-            riskInput.value = localStorage.getItem('user_risk') || '1.0';
-            const runCalc = () => updateCalculator(d.data.entry, d.data.sl);
-            capInput.oninput = runCalc;
-            riskInput.oninput = runCalc;
-            runCalc();
-        }}
-    }}
-    </script></body></html>"""
+    # 整體統計
+    total_trades = sum([r['total_trades'] for r in results])
+    total_wins = sum([r['wins'] for r in results])
+    total_losses = sum([r['losses'] for r in results])
     
-    with open("index.html", "w", encoding="utf-8") as f: f.write(final_html)
-    print("✅ index.html generated!")
-
-if __name__ == "__main__":
-    main()
+    overall_win_rate = (total_wins / total_trades * 100) if total_trades > 0 else 0
+    
+    avg_return = np.mean([r['return_pct'] for r in results])
+    best_stock = max(results, key=lambda x: x['return
