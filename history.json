@@ -33,9 +33,14 @@
             "sector": "\ud83c\udfed Industrials"
         },
         {
-            "ticker": "GOOGL",
-            "score": 134,
-            "sector": "\ud83d\udce1 Comms & Media"
+            "ticker": "BABA",
+            "score": 133,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "GM",
+            "score": 133,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         },
         {
             "ticker": "TSLA",
@@ -43,14 +48,9 @@
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         },
         {
-            "ticker": "MU",
-            "score": 120,
-            "sector": "\u26a1 Semiconductors"
-        },
-        {
-            "ticker": "ABNB",
-            "score": 116,
-            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+            "ticker": "GOOGL",
+            "score": 124,
+            "sector": "\ud83d\udce1 Comms & Media"
         }
     ]
 }
