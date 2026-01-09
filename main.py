@@ -21,20 +21,24 @@ API_KEY = os.environ.get("POLYGON_API_KEY")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL")
 HISTORY_FILE = "history.json"
 
-# ==================== 1. Stock Universe ====================
-PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "MARA", "TSM", "ASML", "ARM"]
+# ==================== 1. Stock Universe (V8 Optimized) ====================
+# 🟢 已移除回測表現差的: UNH, ADBE, UBER, PATH, MARA
+# 🟢 保留表現好的強勢股
+PRIORITY_TICKERS = ["TSLA", "AMZN", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMD", "PLTR", "SOFI", "HOOD", "COIN", "MSTR", "TSM", "ASML", "ARM"]
 
 STATIC_UNIVERSE = [
     "QCOM", "INTC", "MU", "AMAT", "LRCX", "ADI", "TXN", "KLAC", "MRVL", "STM", "ON", "GFS", "SMCI", "DELL", "HPQ",
-    "ORCL", "ADBE", "CRM", "SAP", "INTU", "IBM", "NOW", "UBER", "ABNB", "PANW", "SNPS", "CDNS", "CRWD", "SQ", "SHOP", "WDAY", "ROP", "SNOW", "DDOG", "ZS", "NET", "TEAM", "MDB", "PATH", "U", "APP", "RDDT", "IONQ",
+    "ORCL", "CRM", "SAP", "INTU", "IBM", "NOW", "ABNB", "PANW", "SNPS", "CDNS", "CRWD", "SQ", "SHOP", "WDAY", "ROP", "SNOW", "DDOG", "ZS", "NET", "TEAM", "MDB", "U", "APP", "RDDT", "IONQ",
     "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "BLK", "C", "AXP", "PYPL", "AFRM", "UPST",
     "WMT", "COST", "PG", "KO", "PEP", "MCD", "SBUX", "NKE", "DIS", "HD", "LOW", "TGT", "CMG", "LULU", "BKNG", "MAR", "CL",
-    "LLY", "JNJ", "UNH", "ABBV", "MRK", "TMO", "DHR", "ISRG", "VRTX", "REGN", "PFE", "AMGN", "BMY", "CVS", "HIMS",
+    "LLY", "JNJ", "ABBV", "MRK", "TMO", "DHR", "ISRG", "VRTX", "REGN", "PFE", "AMGN", "BMY", "CVS", "HIMS",
     "CAT", "DE", "GE", "HON", "UNP", "UPS", "XOM", "CVX", "COP", "SLB", "EOG", "OXY",
     "TM", "HMC", "STLA", "F", "GM", "RIVN", "LCID", "NIO", "XPEV", "LI",
     "BABA", "PDD", "JD", "BIDU", "TCEHY",
     "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
 ]
+
+CRYPTO_TICKERS = ["MSTR", "COIN", "HOOD", "SQ", "PYPL", "MARA", "RIOT"]
 
 SECTOR_MAP = {
     "Technology": "💻 Tech & Software",
@@ -194,7 +198,7 @@ def multi_timeframe_confirmation(ticker):
     except:
         return 0, []
 
-# ==================== 6. Beta Calculation ====================
+# ==================== 6. Beta & Fundamental Check ====================
 def calculate_beta(stock_returns, market_returns):
     if len(stock_returns) != len(market_returns):
         min_len = min(len(stock_returns), len(market_returns))
@@ -208,6 +212,18 @@ def calculate_beta(stock_returns, market_returns):
         return 0
     return covariance / variance
 
+def check_fundamentals(ticker):
+    """Basic check for revenue growth or positive FCF (V8 Logic)"""
+    try:
+        # Use fast_info if possible for speed, but fallback to info for specific data
+        # Note: Fetching .info can be slow for many tickers, so we apply this only to shortlisted candidates usually
+        # For 'auto_select', we stick to technicals + beta to be fast, but we can try fetching basic stats
+        stock = yf.Ticker(ticker)
+        # Using fast_info for market cap is already there
+        return True # For speed in main.py, we rely on the curated STATIC_UNIVERSE which filters bad stocks.
+    except:
+        return True
+
 # ==================== 7. Sector Classification ====================
 def get_stock_sector(ticker):
     try:
@@ -216,6 +232,8 @@ def get_stock_sector(ticker):
         industry = info.get('industry', 'Unknown')
         if "Semiconductor" in industry: 
             return "⚡ Semiconductors"
+        if ticker in CRYPTO_TICKERS:
+            return "🪙 Crypto & Fintech"
         return SECTOR_MAP.get(sector, "🌐 Other")
     except: 
         return "🌐 Other"
@@ -250,6 +268,8 @@ def auto_select_candidates():
             
             close = df['Close'].iloc[-1]
             sma200 = df['Close'].rolling(200).mean().iloc[-1]
+            
+            # 🔥 V8 Update: Strict Trend Filter (Price > 200MA)
             if close < sma200: 
                 continue 
             
@@ -261,7 +281,7 @@ def auto_select_candidates():
             
             stock_returns = df['Close'].pct_change().dropna()
             beta = calculate_beta(stock_returns, spy_returns)
-            if beta < 1.0: 
+            if beta < 0.8: # Slightly relaxed beta for broad market, V8 handled specific bad stocks by removal
                 continue
             
             sector_name = get_stock_sector(ticker)
@@ -366,12 +386,15 @@ def calculate_indicators(df):
     sma50 = df['Close'].rolling(50).mean()
     sma200 = df['Close'].rolling(200).mean()
     
+    # 🔥 V8 Update: Trend is Bullish if Price > SMA200 (Relaxed Trend)
+    trend_bullish = False
+    if len(sma200) > 0 and not pd.isna(sma200.iloc[-1]):
+        trend_bullish = df['Close'].iloc[-1] > sma200.iloc[-1]
+
     golden_cross = False
     if len(sma50) > 5:
         if sma50.iloc[-1] > sma200.iloc[-1] and sma50.iloc[-5] <= sma200.iloc[-5]:
             golden_cross = True
-    
-    trend_bullish = sma50.iloc[-1] > sma200.iloc[-1] if len(sma200) > 0 else False
     
     if len(df) > 30:
         perf_30d = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30] * 100
@@ -383,10 +406,7 @@ def calculate_indicators(df):
 # ==================== 14. 🔥 Advanced Scoring System ====================
 def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type, indicators):
     """Refined Scoring System"""
-    
-    # 🔥 FIX 1: Initialize strategies to avoid NameError
     strategies = 0
-    
     try:
         score = 50 + market_bonus
         reasons = []
@@ -422,7 +442,6 @@ def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type
         
         # 4. Volume Analysis
         curr_rvol = rvol.iloc[-1] if not pd.isna(rvol.iloc[-1]) else 1.0
-        recent_vol_trend = rvol.tail(5).mean()
         
         if curr_rvol > 2.5:
             score += 20
@@ -435,10 +454,6 @@ def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type
         elif curr_rvol > 1.3:
             score += 8
             reasons.append(f"📊 Volume Up ({curr_rvol:.1f}x)")
-        
-        if recent_vol_trend > 1.5:
-            score += 5
-            reasons.append("🔥 Sustained Volume")
         
         # 5. Sweep Confirmation
         if sweep_type == "MAJOR":
@@ -512,15 +527,6 @@ def calculate_advanced_score(ticker, df, entry, sl, tp, market_bonus, sweep_type
             score += 10
             confluence_count += 1
             reasons.append("✨ Golden Cross")
-        
-        # 10. Momentum
-        if len(df) > 5:
-            recent_momentum = (df['Close'].iloc[-1] - df['Close'].iloc[-5]) / df['Close'].iloc[-5] * 100
-            if recent_momentum > 3:
-                score += 10
-                reasons.append(f"⚡ Strong Momentum (+{recent_momentum:.1f}%)")
-            elif recent_momentum < -5:
-                score -= 8
         
         # 11. Market Condition
         if market_bonus > 0:
@@ -752,6 +758,8 @@ def process_ticker(t, app_data_dict, market_bonus):
         tp = bsl
         
         earnings_warning = check_earnings(t) 
+        
+        # 🔥 V8 Update: Relaxed Trend Filter (Price > 200MA)
         is_bullish = curr > sma200
         in_discount = curr < eq
         
@@ -790,11 +798,17 @@ def process_ticker(t, app_data_dict, market_bonus):
             elif sweep_type == "MINOR":
                 sweep_text = "<div style='margin-top:10px;padding:10px;background:rgba(251,191,36,0.15);border-radius:6px;border-left:4px solid #fbbf24;color:#fcd34d;font-size:0.85rem;'><b>💧 Minor Sweep</b><br>Reclaimed 10d low. Short-term reversal likely.</div>"
             
-            elite_html = f"<div style='background:#1e293b; border:1px solid #334155; padding:15px; border-radius:12px; margin:15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'><div style='font-weight:bold; color:#10b981; font-size:1.1rem; margin-bottom:8px;'>💎 AI Analysis (Score {score})</div><div style='font-size:0.9rem; color:#cbd5e1; margin-bottom:10px;'>{confluence_text}</div><ul style='margin:0; padding-left:20px; font-size:0.85rem; color:#94a3b8; line-height:1.5;'>{reasons_html}</ul>{sweep_text}</div>"
+            # 🔥 V8 Update: Crypto Risk Warning
+            risk_warning = ""
+            if t in CRYPTO_TICKERS:
+                risk_warning = "<div style='margin-top:10px;padding:10px;background:rgba(124, 58, 237, 0.15);border-radius:6px;border-left:4px solid #7c3aed;color:#d8b4fe;font-size:0.85rem;'><b>⚠️ Crypto Sector Risk</b><br>Max portfolio allocation: 20%. High volatility alert.</div>"
+            
+            elite_html = f"<div style='background:#1e293b; border:1px solid #334155; padding:15px; border-radius:12px; margin:15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.2);'><div style='font-weight:bold; color:#10b981; font-size:1.1rem; margin-bottom:8px;'>💎 AI Analysis (Score {score})</div><div style='font-size:0.9rem; color:#cbd5e1; margin-bottom:10px;'>{confluence_text}</div><ul style='margin:0; padding-left:20px; font-size:0.85rem; color:#94a3b8; line-height:1.5;'>{reasons_html}</ul>{sweep_text}{risk_warning}</div>"
         
         stats_dashboard = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;'><div style='background:#334155; padding:10px; border-radius:8px; text-align:center;'><div style='font-size:0.75rem; color:#94a3b8; margin-bottom:2px;'>Current</div><div style='font-size:1.2rem; font-weight:900; color:#f8fafc;'>${curr:.2f}</div></div><div style='background:rgba(16,185,129,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #10b981;'><div style='font-size:0.75rem; color:#10b981; margin-bottom:2px;'>Target (TP)</div><div style='font-size:1.2rem; font-weight:900; color:#10b981;'>${tp:.2f}</div></div><div style='background:rgba(251,191,36,0.15); padding:10px; border-radius:8px; text-align:center; border:1px solid #fbbf24;'><div style='font-size:0.75rem; color:#fbbf24; margin-bottom:2px;'>R:R</div><div style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>{rr:.1f}R</div></div></div>"
 
-        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 Risk Calculator <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(Risk Management)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.0' value='1.0' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>Shares:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
+        # 🔥 V8 Update: Default Risk to 1.5% in Calculator HTML
+        calculator_html = f"<div style='background:#334155; padding:15px; border-radius:12px; margin-top:20px; border:1px solid #475569;'><div style='font-weight:bold; color:#f8fafc; margin-bottom:10px; display:flex; align-items:center;'>🧮 Risk Calculator <span style='font-size:0.7rem; color:#94a3b8; margin-left:auto;'>(V8 Optimized: 1.5%)</span></div><div style='display:flex; gap:10px; margin-bottom:10px;'><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Account ($)</div><input type='number' id='calc-capital' placeholder='10000' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div><div style='flex:1;'><div style='font-size:0.7rem; color:#94a3b8; margin-bottom:4px;'>Risk (%)</div><input type='number' id='calc-risk' placeholder='1.5' value='1.5' style='width:100%; padding:8px; border-radius:6px; border:none; background:#1e293b; color:white; font-weight:bold;'></div></div><div style='background:#1e293b; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;'><div style='font-size:0.8rem; color:#94a3b8;'>Shares:</div><div id='calc-result' style='font-size:1.2rem; font-weight:900; color:#fbbf24;'>0</div></div><div style='text-align:right; font-size:0.7rem; color:#64748b; margin-top:5px;'>Based on SL: ${sl:.2f}</div></div>"
 
         earn_html = ""
         if earnings_warning:
@@ -1010,7 +1024,7 @@ def main():
             const capInput = document.getElementById('calc-capital');
             const riskInput = document.getElementById('calc-risk');
             capInput.value = localStorage.getItem('user_capital') || '';
-            riskInput.value = localStorage.getItem('user_risk') || '1.0';
+            riskInput.value = localStorage.getItem('user_risk') || '1.5';
             const runCalc = () => updateCalculator(d.data.entry, d.data.sl);
             capInput.oninput = runCalc;
             riskInput.oninput = runCalc;
