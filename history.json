@@ -56,28 +56,28 @@
     "2026-01-12": [
         {
             "ticker": "DE",
-            "score": 231,
+            "score": 223,
             "sector": "\ud83c\udfed Industrials"
         },
         {
-            "ticker": "V",
-            "score": 168,
-            "sector": "\ud83c\udfe6 Financials"
-        },
-        {
-            "ticker": "GE",
-            "score": 156,
-            "sector": "\ud83c\udfed Industrials"
-        },
-        {
-            "ticker": "BABA",
-            "score": 133,
+            "ticker": "AMZN",
+            "score": 213,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         },
         {
+            "ticker": "GE",
+            "score": 166,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
             "ticker": "MA",
-            "score": 122,
+            "score": 155,
             "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "QCOM",
+            "score": 142,
+            "sector": "\u26a1 Semiconductors"
         }
     ]
 }
