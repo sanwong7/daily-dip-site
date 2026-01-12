@@ -30,7 +30,7 @@ STATIC_UNIVERSE = [
     "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "BLK", "C", "AXP", "PYPL", "AFRM", "UPST",
     "WMT", "COST", "PG", "KO", "PEP", "MCD", "SBUX", "NKE", "DIS", "HD", "LOW", "TGT", "CMG", "LULU", "BKNG", "MAR", "CL",
     "LLY", "JNJ", "ABBV", "MRK", "TMO", "DHR", "ISRG", "VRTX", "REGN", "PFE", "AMGN", "BMY", "CVS", "HIMS",
-    "CAT", "DE", "GE", "HON", "UNP", "UPS", "XOM", "CVX", "COP", "SLB", "EOG", "OXY",
+    "CAT", "DE", "GE", "HON", "UNP", "UPS", # Removed Energy Tickers (XOM, CVX, COP, SLB, EOG, OXY)
     "TM", "HMC", "STLA", "F", "GM", "RIVN", "LCID", "NIO", "XPEV", "LI",
     "BABA", "PDD", "JD", "BIDU", "TCEHY",
     "NFLX", "CMCSA", "TMUS", "VZ", "T", "ASTS"
@@ -363,7 +363,7 @@ def check_earnings(ticker):
         if calendar is not None:
             if isinstance(calendar, dict): # New yfinance
                  if 'Earnings Date' in calendar:
-                     earnings_date = calendar['Earnings Date'][0]
+                      earnings_date = calendar['Earnings Date'][0]
             elif not calendar.empty: # Old dataframe style
                 earnings_date = calendar.iloc[0, 0]
             
