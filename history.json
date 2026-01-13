@@ -79,5 +79,32 @@
             "score": 142,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-01-13": [
+        {
+            "ticker": "AMZN",
+            "score": 223,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "DE",
+            "score": 211,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 166,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "NET",
+            "score": 131,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "TMO",
+            "score": 131,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
