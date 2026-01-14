@@ -110,8 +110,13 @@
     "2026-01-14": [
         {
             "ticker": "BIDU",
-            "score": 851,
+            "score": 813,
             "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "DE",
+            "score": 221,
+            "sector": "\ud83c\udfed Industrials"
         },
         {
             "ticker": "AMZN",
@@ -119,19 +124,14 @@
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         },
         {
-            "ticker": "DE",
-            "score": 201,
-            "sector": "\ud83c\udfed Industrials"
-        },
-        {
             "ticker": "GE",
             "score": 166,
             "sector": "\ud83c\udfed Industrials"
         },
         {
-            "ticker": "TMO",
-            "score": 131,
-            "sector": "\ud83d\udc8a Healthcare"
+            "ticker": "ABNB",
+            "score": 134,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
     ]
 }
