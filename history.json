@@ -106,5 +106,32 @@
             "score": 131,
             "sector": "\ud83d\udc8a Healthcare"
         }
+    ],
+    "2026-01-14": [
+        {
+            "ticker": "BIDU",
+            "score": 851,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 205,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "DE",
+            "score": 201,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 166,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TMO",
+            "score": 131,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
