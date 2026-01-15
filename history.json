@@ -133,5 +133,32 @@
             "score": 134,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-01-15": [
+        {
+            "ticker": "BIDU",
+            "score": 813,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "DE",
+            "score": 221,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 205,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "GE",
+            "score": 166,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "U",
+            "score": 147,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
