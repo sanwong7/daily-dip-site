@@ -187,5 +187,32 @@
             "score": 156,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-01-19": [
+        {
+            "ticker": "BIDU",
+            "score": 813,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "DE",
+            "score": 211,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 210,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "GE",
+            "score": 166,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MU",
+            "score": 156,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
