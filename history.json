@@ -214,5 +214,32 @@
             "score": 156,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-01-20": [
+        {
+            "ticker": "BIDU",
+            "score": 818,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 217,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "DE",
+            "score": 206,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "ISRG",
+            "score": 168,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "MU",
+            "score": 155,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
