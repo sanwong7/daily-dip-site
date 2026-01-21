@@ -244,28 +244,28 @@
     ],
     "2026-01-21": [
         {
-            "ticker": "BIDU",
-            "score": 798,
-            "sector": "\ud83d\udce1 Comms & Media"
-        },
-        {
             "ticker": "DE",
-            "score": 206,
+            "score": 221,
             "sector": "\ud83c\udfed Industrials"
         },
         {
             "ticker": "AMZN",
-            "score": 192,
+            "score": 202,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         },
         {
+            "ticker": "MRVL",
+            "score": 174,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
             "ticker": "GE",
-            "score": 159,
+            "score": 169,
             "sector": "\ud83c\udfed Industrials"
         },
         {
             "ticker": "MU",
-            "score": 153,
+            "score": 163,
             "sector": "\u26a1 Semiconductors"
         }
     ]
