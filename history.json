@@ -268,5 +268,32 @@
             "score": 163,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-01-22": [
+        {
+            "ticker": "DE",
+            "score": 259,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 164,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MU",
+            "score": 160,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "BAC",
+            "score": 139,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "DIS",
+            "score": 129,
+            "sector": "\ud83d\udce1 Comms & Media"
+        }
     ]
 }
