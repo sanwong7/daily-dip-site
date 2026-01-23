@@ -295,5 +295,32 @@
             "score": 129,
             "sector": "\ud83d\udce1 Comms & Media"
         }
+    ],
+    "2026-01-23": [
+        {
+            "ticker": "DE",
+            "score": 231,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 171,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TCEHY",
+            "score": 170,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "MU",
+            "score": 160,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "BAC",
+            "score": 159,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
