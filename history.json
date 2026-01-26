@@ -322,5 +322,32 @@
             "score": 159,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-01-26": [
+        {
+            "ticker": "DE",
+            "score": 231,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 210,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "TCEHY",
+            "score": 177,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "BAC",
+            "score": 159,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "MU",
+            "score": 150,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
