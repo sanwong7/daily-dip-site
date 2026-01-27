@@ -349,5 +349,32 @@
             "score": 150,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-01-27": [
+        {
+            "ticker": "NET",
+            "score": 399,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "DE",
+            "score": 251,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BAC",
+            "score": 177,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "TCEHY",
+            "score": 169,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "SHOP",
+            "score": 146,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
