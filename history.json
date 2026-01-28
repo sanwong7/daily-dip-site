@@ -376,5 +376,32 @@
             "score": 146,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-01-28": [
+        {
+            "ticker": "DE",
+            "score": 231,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BAC",
+            "score": 164,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "MU",
+            "score": 160,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GE",
+            "score": 145,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "STM",
+            "score": 143,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
