@@ -403,5 +403,32 @@
             "score": 143,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-01-29": [
+        {
+            "ticker": "DE",
+            "score": 269,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 188,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 162,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MU",
+            "score": 160,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "BAC",
+            "score": 159,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
