@@ -430,5 +430,32 @@
             "score": 159,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-01-30": [
+        {
+            "ticker": "DE",
+            "score": 244,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 175,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GE",
+            "score": 171,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "LOW",
+            "score": 163,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "TCEHY",
+            "score": 160,
+            "sector": "\ud83d\udce1 Comms & Media"
+        }
     ]
 }
