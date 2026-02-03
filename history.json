@@ -457,5 +457,32 @@
             "score": 160,
             "sector": "\ud83d\udce1 Comms & Media"
         }
+    ],
+    "2026-02-03": [
+        {
+            "ticker": "DE",
+            "score": 271,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 206,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "LOW",
+            "score": 155,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "IBM",
+            "score": 151,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "HON",
+            "score": 142,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
