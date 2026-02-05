@@ -511,5 +511,32 @@
             "score": 144,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-02-05": [
+        {
+            "ticker": "DE",
+            "score": 256,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 144,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MU",
+            "score": 128,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "AMD",
+            "score": 124,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "UPS",
+            "score": 124,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
