@@ -565,5 +565,32 @@
             "score": 142,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-02-09": [
+        {
+            "ticker": "DE",
+            "score": 266,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 198,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BLK",
+            "score": 154,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "F",
+            "score": 139,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "UPS",
+            "score": 137,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
