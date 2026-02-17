@@ -727,5 +727,32 @@
             "score": 131,
             "sector": "\ud83c\udfed Industrials"
         }
+    ],
+    "2026-02-17": [
+        {
+            "ticker": "DE",
+            "score": 219,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BLK",
+            "score": 164,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "GE",
+            "score": 158,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BAC",
+            "score": 144,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "AXP",
+            "score": 134,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
