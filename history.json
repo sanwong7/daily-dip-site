@@ -808,5 +808,32 @@
             "score": 129,
             "sector": "\ud83d\udc8a Healthcare"
         }
+    ],
+    "2026-02-20": [
+        {
+            "ticker": "DE",
+            "score": 266,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MU",
+            "score": 170,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GE",
+            "score": 168,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BAC",
+            "score": 139,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ADI",
+            "score": 129,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
