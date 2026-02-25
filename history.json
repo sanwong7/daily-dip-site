@@ -889,5 +889,32 @@
             "score": 148,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-02-25": [
+        {
+            "ticker": "DE",
+            "score": 244,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BAC",
+            "score": 167,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "HD",
+            "score": 165,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "ADI",
+            "score": 161,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "JPM",
+            "score": 159,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
