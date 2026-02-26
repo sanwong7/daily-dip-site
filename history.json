@@ -916,5 +916,32 @@
             "score": 159,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-02-26": [
+        {
+            "ticker": "DE",
+            "score": 249,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AXP",
+            "score": 155,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "JPM",
+            "score": 151,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "WFC",
+            "score": 143,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "F",
+            "score": 127,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
