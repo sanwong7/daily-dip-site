@@ -943,5 +943,32 @@
             "score": 127,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-02-27": [
+        {
+            "ticker": "DE",
+            "score": 249,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GM",
+            "score": 169,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "NVDA",
+            "score": 133,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GFS",
+            "score": 121,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "ADI",
+            "score": 119,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
