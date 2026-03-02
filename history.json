@@ -970,5 +970,32 @@
             "score": 119,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-03-02": [
+        {
+            "ticker": "DE",
+            "score": 249,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "ASTS",
+            "score": 165,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GFS",
+            "score": 138,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GM",
+            "score": 129,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "F",
+            "score": 126,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
