@@ -1294,5 +1294,32 @@
             "score": 119,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-03-18": [
+        {
+            "ticker": "NET",
+            "score": 317,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GFS",
+            "score": 161,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "REGN",
+            "score": 146,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "GE",
+            "score": 129,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "BIDU",
+            "score": 122,
+            "sector": "\ud83d\udce1 Comms & Media"
+        }
     ]
 }
