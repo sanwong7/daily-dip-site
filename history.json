@@ -1348,5 +1348,32 @@
             "score": 121,
             "sector": "\ud83d\udc8a Healthcare"
         }
+    ],
+    "2026-03-20": [
+        {
+            "ticker": "NET",
+            "score": 299,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GFS",
+            "score": 176,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "REGN",
+            "score": 133,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "AMAT",
+            "score": 131,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "KLAC",
+            "score": 116,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
