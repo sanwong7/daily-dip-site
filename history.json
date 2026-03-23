@@ -1375,5 +1375,32 @@
             "score": 116,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-03-23": [
+        {
+            "ticker": "NET",
+            "score": 284,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GFS",
+            "score": 181,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "UPS",
+            "score": 164,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "REGN",
+            "score": 151,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "LLY",
+            "score": 146,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
