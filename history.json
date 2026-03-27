@@ -1483,5 +1483,32 @@
             "score": 113,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-03-27": [
+        {
+            "ticker": "DE",
+            "score": 420,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "NET",
+            "score": 329,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GFS",
+            "score": 171,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TSM",
+            "score": 156,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TXN",
+            "score": 109,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
