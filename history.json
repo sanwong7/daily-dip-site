@@ -1564,5 +1564,32 @@
             "score": 133,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-04-01": [
+        {
+            "ticker": "ASTS",
+            "score": 167,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 130,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TSM",
+            "score": 128,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "LLY",
+            "score": 128,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "INTC",
+            "score": 119,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
