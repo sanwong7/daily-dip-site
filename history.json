@@ -1591,5 +1591,32 @@
             "score": 119,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-04-02": [
+        {
+            "ticker": "TXN",
+            "score": 129,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 122,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MU",
+            "score": 121,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GM",
+            "score": 118,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HON",
+            "score": 116,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
