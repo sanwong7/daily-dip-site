@@ -1672,5 +1672,32 @@
             "score": 108,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-04-07": [
+        {
+            "ticker": "NET",
+            "score": 339,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GM",
+            "score": 133,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 122,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "LLY",
+            "score": 118,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "ASTS",
+            "score": 90,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
