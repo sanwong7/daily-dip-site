@@ -1753,5 +1753,32 @@
             "score": 124,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-04-10": [
+        {
+            "ticker": "MRVL",
+            "score": 135,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TXN",
+            "score": 132,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "WFC",
+            "score": 121,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ASTS",
+            "score": 115,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "ABNB",
+            "score": 114,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
