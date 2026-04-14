@@ -1807,5 +1807,32 @@
             "score": 121,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-04-14": [
+        {
+            "ticker": "F",
+            "score": 168,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 150,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "UPS",
+            "score": 139,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TXN",
+            "score": 132,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 127,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
