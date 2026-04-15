@@ -1834,5 +1834,32 @@
             "score": 127,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-04-15": [
+        {
+            "ticker": "F",
+            "score": 158,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 156,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "UPS",
+            "score": 139,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "ARM",
+            "score": 131,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "LLY",
+            "score": 130,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
