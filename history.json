@@ -1915,5 +1915,32 @@
             "score": 138,
             "sector": "\ud83d\udc8a Healthcare"
         }
+    ],
+    "2026-04-20": [
+        {
+            "ticker": "NET",
+            "score": 354,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "ASTS",
+            "score": 159,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "F",
+            "score": 158,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 152,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 146,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
