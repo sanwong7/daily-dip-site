@@ -1942,5 +1942,32 @@
             "score": 146,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-04-21": [
+        {
+            "ticker": "ASTS",
+            "score": 162,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 156,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "TGT",
+            "score": 147,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        },
+        {
+            "ticker": "TXN",
+            "score": 144,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 144,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
