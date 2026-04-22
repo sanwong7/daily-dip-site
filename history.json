@@ -1969,5 +1969,32 @@
             "score": 144,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-04-22": [
+        {
+            "ticker": "LLY",
+            "score": 202,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "HON",
+            "score": 157,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TXN",
+            "score": 152,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 144,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TGT",
+            "score": 137,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        }
     ]
 }
