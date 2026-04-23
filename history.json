@@ -1996,5 +1996,32 @@
             "score": 137,
             "sector": "\ud83d\uded2 Cons. Defensive"
         }
+    ],
+    "2026-04-23": [
+        {
+            "ticker": "UNP",
+            "score": 216,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "LLY",
+            "score": 202,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "REGN",
+            "score": 160,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 144,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MRK",
+            "score": 144,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
