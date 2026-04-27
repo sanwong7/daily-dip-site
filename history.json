@@ -2050,5 +2050,32 @@
             "score": 133,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-04-27": [
+        {
+            "ticker": "DE",
+            "score": 149,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TGT",
+            "score": 147,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 146,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "F",
+            "score": 141,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MRVL",
+            "score": 134,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
