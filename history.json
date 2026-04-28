@@ -2077,5 +2077,32 @@
             "score": 134,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-04-28": [
+        {
+            "ticker": "F",
+            "score": 151,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "UPS",
+            "score": 149,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TGT",
+            "score": 147,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        },
+        {
+            "ticker": "PFE",
+            "score": 144,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "DE",
+            "score": 139,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
