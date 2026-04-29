@@ -2104,5 +2104,32 @@
             "score": 139,
             "sector": "\ud83c\udfed Industrials"
         }
+    ],
+    "2026-04-29": [
+        {
+            "ticker": "V",
+            "score": 308,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "TGT",
+            "score": 147,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        },
+        {
+            "ticker": "BAC",
+            "score": 144,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "DE",
+            "score": 144,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MAR",
+            "score": 138,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
