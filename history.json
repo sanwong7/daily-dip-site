@@ -2131,5 +2131,32 @@
             "score": 138,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-04-30": [
+        {
+            "ticker": "SBUX",
+            "score": 224,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "DE",
+            "score": 179,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TGT",
+            "score": 157,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 156,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AMGN",
+            "score": 156,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
