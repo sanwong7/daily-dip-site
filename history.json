@@ -2185,5 +2185,32 @@
             "score": 147,
             "sector": "\ud83c\udfed Industrials"
         }
+    ],
+    "2026-05-04": [
+        {
+            "ticker": "GFS",
+            "score": 211,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "UPS",
+            "score": 187,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MAR",
+            "score": 154,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "PFE",
+            "score": 149,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "LLY",
+            "score": 147,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
