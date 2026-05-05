@@ -2212,5 +2212,32 @@
             "score": 147,
             "sector": "\ud83d\udc8a Healthcare"
         }
+    ],
+    "2026-05-05": [
+        {
+            "ticker": "UPS",
+            "score": 150,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TGT",
+            "score": 147,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        },
+        {
+            "ticker": "LLY",
+            "score": 147,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 143,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 141,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
