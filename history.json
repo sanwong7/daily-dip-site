@@ -2239,5 +2239,32 @@
             "score": 141,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-05-06": [
+        {
+            "ticker": "AMGN",
+            "score": 221,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "GE",
+            "score": 163,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "UPS",
+            "score": 159,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TGT",
+            "score": 157,
+            "sector": "\ud83d\uded2 Cons. Defensive"
+        },
+        {
+            "ticker": "LLY",
+            "score": 147,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
