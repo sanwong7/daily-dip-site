@@ -2320,5 +2320,32 @@
             "score": 144,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-05-11": [
+        {
+            "ticker": "CDNS",
+            "score": 165,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "NIO",
+            "score": 154,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "LLY",
+            "score": 147,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "GE",
+            "score": 143,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "UPS",
+            "score": 142,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
