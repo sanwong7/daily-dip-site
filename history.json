@@ -2347,5 +2347,32 @@
             "score": 142,
             "sector": "\ud83c\udfed Industrials"
         }
+    ],
+    "2026-05-12": [
+        {
+            "ticker": "C",
+            "score": 167,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "MAR",
+            "score": 154,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "NIO",
+            "score": 154,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 149,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "JD",
+            "score": 143,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
