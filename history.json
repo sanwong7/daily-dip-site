@@ -2374,5 +2374,32 @@
             "score": 143,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-05-13": [
+        {
+            "ticker": "C",
+            "score": 167,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "F",
+            "score": 167,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "LLY",
+            "score": 160,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 149,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "ON",
+            "score": 149,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
