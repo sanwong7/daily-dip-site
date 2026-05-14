@@ -2401,5 +2401,32 @@
             "score": 149,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-05-14": [
+        {
+            "ticker": "C",
+            "score": 184,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "F",
+            "score": 172,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 169,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MAR",
+            "score": 164,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "LLY",
+            "score": 150,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
