@@ -2455,5 +2455,32 @@
             "score": 154,
             "sector": "\ud83c\udfed Industrials"
         }
+    ],
+    "2026-05-18": [
+        {
+            "ticker": "HON",
+            "score": 161,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 149,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MAR",
+            "score": 148,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "DE",
+            "score": 144,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "F",
+            "score": 140,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
