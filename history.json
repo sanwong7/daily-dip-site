@@ -2536,5 +2536,32 @@
             "score": 151,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-05-21": [
+        {
+            "ticker": "LLY",
+            "score": 165,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 158,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "HON",
+            "score": 154,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "UPS",
+            "score": 154,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "MAR",
+            "score": 151,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
