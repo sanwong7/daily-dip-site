@@ -2590,5 +2590,32 @@
             "score": 155,
             "sector": "\ud83d\udc8a Healthcare"
         }
+    ],
+    "2026-05-25": [
+        {
+            "ticker": "HPQ",
+            "score": 183,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 174,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "ABNB",
+            "score": 171,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 158,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "LLY",
+            "score": 155,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
