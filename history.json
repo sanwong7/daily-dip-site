@@ -2671,5 +2671,32 @@
             "score": 158,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-05-28": [
+        {
+            "ticker": "BIDU",
+            "score": 896,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "LLY",
+            "score": 180,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "HPQ",
+            "score": 174,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 169,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 165,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
