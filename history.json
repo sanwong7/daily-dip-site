@@ -2725,5 +2725,32 @@
             "score": 148,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-06-01": [
+        {
+            "ticker": "AMZN",
+            "score": 182,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 180,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "HON",
+            "score": 171,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "SNOW",
+            "score": 160,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "ABNB",
+            "score": 157,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
