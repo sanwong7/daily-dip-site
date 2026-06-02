@@ -2752,5 +2752,32 @@
             "score": 157,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-06-02": [
+        {
+            "ticker": "CDNS",
+            "score": 165,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AMGN",
+            "score": 161,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "AAPL",
+            "score": 158,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "LLY",
+            "score": 155,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "ASML",
+            "score": 148,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
