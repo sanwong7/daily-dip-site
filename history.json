@@ -2779,5 +2779,32 @@
             "score": 148,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-06-03": [
+        {
+            "ticker": "LLY",
+            "score": 165,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 165,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "F",
+            "score": 157,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AMGN",
+            "score": 155,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "HON",
+            "score": 154,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
