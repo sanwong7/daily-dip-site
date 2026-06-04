@@ -2806,5 +2806,32 @@
             "score": 154,
             "sector": "\ud83c\udfed Industrials"
         }
+    ],
+    "2026-06-04": [
+        {
+            "ticker": "SBUX",
+            "score": 254,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AMGN",
+            "score": 184,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "JPM",
+            "score": 171,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ASML",
+            "score": 156,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "HON",
+            "score": 153,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
