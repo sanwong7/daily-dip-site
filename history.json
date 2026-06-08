@@ -2860,5 +2860,32 @@
             "score": 147,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-06-08": [
+        {
+            "ticker": "SBUX",
+            "score": 259,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "NVDA",
+            "score": 210,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "HON",
+            "score": 202,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "JPM",
+            "score": 173,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "LLY",
+            "score": 167,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
