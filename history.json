@@ -2941,5 +2941,32 @@
             "score": 124,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-06-11": [
+        {
+            "ticker": "ABNB",
+            "score": 203,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HON",
+            "score": 181,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 144,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "ASML",
+            "score": 141,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 133,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
