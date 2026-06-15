@@ -2995,5 +2995,32 @@
             "score": 143,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-06-15": [
+        {
+            "ticker": "ABNB",
+            "score": 183,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HON",
+            "score": 169,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 158,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GE",
+            "score": 148,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "NVDA",
+            "score": 145,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
