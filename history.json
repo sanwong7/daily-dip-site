@@ -3022,5 +3022,32 @@
             "score": 145,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-06-16": [
+        {
+            "ticker": "F",
+            "score": 404,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 241,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HON",
+            "score": 161,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GE",
+            "score": 153,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 138,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
