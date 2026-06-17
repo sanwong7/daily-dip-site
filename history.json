@@ -3049,5 +3049,32 @@
             "score": 138,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-06-17": [
+        {
+            "ticker": "F",
+            "score": 379,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 229,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "GE",
+            "score": 148,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "HON",
+            "score": 146,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "SNOW",
+            "score": 140,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
