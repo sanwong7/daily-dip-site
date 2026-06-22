@@ -3130,5 +3130,32 @@
             "score": 158,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-06-22": [
+        {
+            "ticker": "SBUX",
+            "score": 216,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HON",
+            "score": 167,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "HIMS",
+            "score": 149,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "ASML",
+            "score": 147,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "C",
+            "score": 139,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
