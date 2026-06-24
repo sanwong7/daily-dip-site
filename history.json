@@ -3184,5 +3184,32 @@
             "score": 121,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-06-24": [
+        {
+            "ticker": "SBUX",
+            "score": 214,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HPQ",
+            "score": 192,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "HON",
+            "score": 156,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AMZN",
+            "score": 144,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "NET",
+            "score": 126,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
