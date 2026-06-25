@@ -3211,5 +3211,32 @@
             "score": 126,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-06-25": [
+        {
+            "ticker": "SBUX",
+            "score": 204,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HPQ",
+            "score": 179,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "HON",
+            "score": 146,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "ASML",
+            "score": 135,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GS",
+            "score": 132,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
