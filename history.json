@@ -3265,5 +3265,32 @@
             "score": 162,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-06-29": [
+        {
+            "ticker": "MDB",
+            "score": 233,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 209,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "RIVN",
+            "score": 192,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "IBM",
+            "score": 176,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "HPQ",
+            "score": 174,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
