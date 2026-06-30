@@ -3292,5 +3292,32 @@
             "score": 174,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-06-30": [
+        {
+            "ticker": "SBUX",
+            "score": 216,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "IBM",
+            "score": 176,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "TSLA",
+            "score": 174,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HON",
+            "score": 154,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "NVDA",
+            "score": 148,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
