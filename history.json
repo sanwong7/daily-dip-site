@@ -3319,5 +3319,32 @@
             "score": 148,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-07-01": [
+        {
+            "ticker": "SBUX",
+            "score": 229,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "IBM",
+            "score": 166,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "PANW",
+            "score": 148,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "ON",
+            "score": 136,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "NVDA",
+            "score": 133,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
