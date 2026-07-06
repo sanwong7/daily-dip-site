@@ -3400,5 +3400,32 @@
             "score": 133,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-07-06": [
+        {
+            "ticker": "SBUX",
+            "score": 226,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HON",
+            "score": 171,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "IBM",
+            "score": 166,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "GFS",
+            "score": 161,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "PANW",
+            "score": 148,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
