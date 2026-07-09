@@ -3481,5 +3481,32 @@
             "score": 147,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-07-09": [
+        {
+            "ticker": "ASML",
+            "score": 431,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 249,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "PANW",
+            "score": 158,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "IBM",
+            "score": 146,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "SNOW",
+            "score": 142,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
