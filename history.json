@@ -3508,5 +3508,32 @@
             "score": 142,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-07-10": [
+        {
+            "ticker": "SBUX",
+            "score": 249,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "PANW",
+            "score": 158,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "ASML",
+            "score": 155,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GE",
+            "score": 146,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "IBM",
+            "score": 136,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
