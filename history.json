@@ -3562,5 +3562,32 @@
             "score": 118,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-07-14": [
+        {
+            "ticker": "NET",
+            "score": 272,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "C",
+            "score": 250,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 244,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "PANW",
+            "score": 180,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "MS",
+            "score": 148,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
