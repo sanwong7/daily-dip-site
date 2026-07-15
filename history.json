@@ -3589,5 +3589,32 @@
             "score": 148,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-07-15": [
+        {
+            "ticker": "C",
+            "score": 275,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "DE",
+            "score": 271,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 254,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "PANW",
+            "score": 180,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "MS",
+            "score": 138,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
