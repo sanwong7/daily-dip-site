@@ -3697,5 +3697,32 @@
             "score": 167,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-07-21": [
+        {
+            "ticker": "ASML",
+            "score": 459,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "F",
+            "score": 369,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "KLAC",
+            "score": 332,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "C",
+            "score": 260,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 244,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
