@@ -3724,5 +3724,32 @@
             "score": 244,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-07-22": [
+        {
+            "ticker": "F",
+            "score": 377,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 254,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MU",
+            "score": 220,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GFS",
+            "score": 177,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "VRTX",
+            "score": 131,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
