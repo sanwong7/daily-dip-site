@@ -3778,5 +3778,32 @@
             "score": 108,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-07-24": [
+        {
+            "ticker": "SBUX",
+            "score": 244,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MU",
+            "score": 193,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "GFS",
+            "score": 167,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "JPM",
+            "score": 137,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ABNB",
+            "score": 137,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
