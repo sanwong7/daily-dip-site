@@ -3832,5 +3832,32 @@
             "score": 126,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-07-28": [
+        {
+            "ticker": "SBUX",
+            "score": 244,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "BAC",
+            "score": 134,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ADI",
+            "score": 134,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "VRTX",
+            "score": 131,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "RIVN",
+            "score": 123,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
