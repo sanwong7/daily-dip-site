@@ -3886,5 +3886,32 @@
             "score": 103,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-07-30": [
+        {
+            "ticker": "AMAT",
+            "score": 374,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 277,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "C",
+            "score": 166,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ON",
+            "score": 151,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "ARM",
+            "score": 150,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
