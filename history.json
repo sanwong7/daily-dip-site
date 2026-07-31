@@ -3913,5 +3913,32 @@
             "score": 150,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-07-31": [
+        {
+            "ticker": "SBUX",
+            "score": 278,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "MDB",
+            "score": 197,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "C",
+            "score": 176,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ADI",
+            "score": 151,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "NET",
+            "score": 137,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
