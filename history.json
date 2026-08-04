@@ -3967,5 +3967,32 @@
             "score": 146,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-08-04": [
+        {
+            "ticker": "GFS",
+            "score": 195,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "KLAC",
+            "score": 180,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MDB",
+            "score": 170,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "ARM",
+            "score": 161,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "AFRM",
+            "score": 150,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
