@@ -4129,5 +4129,32 @@
             "score": 142,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-08-13": [
+        {
+            "ticker": "SBUX",
+            "score": 289,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "GFS",
+            "score": 197,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "HON",
+            "score": 164,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AFRM",
+            "score": 124,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "SHOP",
+            "score": 123,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
