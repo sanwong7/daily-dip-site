@@ -4264,5 +4264,32 @@
             "score": 112,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-08-20": [
+        {
+            "ticker": "C",
+            "score": 209,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ARM",
+            "score": 128,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TMO",
+            "score": 121,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "KLAC",
+            "score": 118,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "AMD",
+            "score": 116,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
