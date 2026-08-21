@@ -4291,5 +4291,32 @@
             "score": 116,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-08-21": [
+        {
+            "ticker": "DE",
+            "score": 262,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "C",
+            "score": 237,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "GM",
+            "score": 138,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AMD",
+            "score": 131,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "RIVN",
+            "score": 129,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
