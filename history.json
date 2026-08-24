@@ -4318,5 +4318,32 @@
             "score": 129,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-08-24": [
+        {
+            "ticker": "C",
+            "score": 228,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "DE",
+            "score": 216,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GM",
+            "score": 133,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AXP",
+            "score": 128,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "ADI",
+            "score": 121,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
