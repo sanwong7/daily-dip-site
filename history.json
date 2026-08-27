@@ -4372,5 +4372,32 @@
             "score": 124,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-08-27": [
+        {
+            "ticker": "ASML",
+            "score": 419,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "DE",
+            "score": 236,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "TXN",
+            "score": 161,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "KLAC",
+            "score": 144,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "DDOG",
+            "score": 143,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
