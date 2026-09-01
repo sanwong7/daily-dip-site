@@ -4461,24 +4461,24 @@
             "sector": "\u26a1 Semiconductors"
         },
         {
-            "ticker": "BAC",
-            "score": 171,
-            "sector": "\ud83c\udfe6 Financials"
+            "ticker": "ADI",
+            "score": 170,
+            "sector": "\u26a1 Semiconductors"
         },
         {
             "ticker": "GM",
-            "score": 147,
+            "score": 139,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         },
         {
-            "ticker": "SHOP",
-            "score": 143,
+            "ticker": "NOW",
+            "score": 124,
             "sector": "\ud83d\udcbb Tech & Software"
         },
         {
-            "ticker": "NOW",
-            "score": 142,
-            "sector": "\ud83d\udcbb Tech & Software"
+            "ticker": "AFRM",
+            "score": 108,
+            "sector": "\ud83c\udfe6 Financials"
         }
     ]
 }
