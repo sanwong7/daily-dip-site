@@ -4453,5 +4453,32 @@
             "score": 142,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-09-01": [
+        {
+            "ticker": "ASML",
+            "score": 391,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "BAC",
+            "score": 171,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "GM",
+            "score": 147,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "SHOP",
+            "score": 143,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "NOW",
+            "score": 142,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
