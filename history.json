@@ -4507,5 +4507,32 @@
             "score": 139,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-09-03": [
+        {
+            "ticker": "CAT",
+            "score": 175,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "DELL",
+            "score": 145,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "SHOP",
+            "score": 144,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AFRM",
+            "score": 143,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "STM",
+            "score": 143,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
