@@ -4561,5 +4561,32 @@
             "score": 153,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-09-07": [
+        {
+            "ticker": "ADI",
+            "score": 174,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "MDB",
+            "score": 172,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "KLAC",
+            "score": 160,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "CAT",
+            "score": 154,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "AFRM",
+            "score": 153,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
