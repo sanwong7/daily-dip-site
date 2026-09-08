@@ -4588,5 +4588,32 @@
             "score": 153,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-09-08": [
+        {
+            "ticker": "ADI",
+            "score": 187,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "KLAC",
+            "score": 178,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TMO",
+            "score": 149,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "TXN",
+            "score": 148,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "SHOP",
+            "score": 143,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
