@@ -4696,5 +4696,32 @@
             "score": 163,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-09-14": [
+        {
+            "ticker": "C",
+            "score": 245,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "NVDA",
+            "score": 236,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "TMO",
+            "score": 154,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "UPS",
+            "score": 149,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "GM",
+            "score": 148,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
