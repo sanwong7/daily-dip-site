@@ -4777,5 +4777,32 @@
             "score": 106,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-09-17": [
+        {
+            "ticker": "MSFT",
+            "score": 640,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "C",
+            "score": 217,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "GM",
+            "score": 159,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "AMGN",
+            "score": 159,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "STM",
+            "score": 156,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
