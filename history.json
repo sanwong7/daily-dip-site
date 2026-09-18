@@ -4804,5 +4804,32 @@
             "score": 156,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-09-18": [
+        {
+            "ticker": "MSFT",
+            "score": 660,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "C",
+            "score": 222,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "MSTR",
+            "score": 182,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        },
+        {
+            "ticker": "AMGN",
+            "score": 163,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "GM",
+            "score": 161,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
