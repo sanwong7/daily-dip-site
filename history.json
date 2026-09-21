@@ -4831,5 +4831,32 @@
             "score": 161,
             "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
         }
+    ],
+    "2026-09-21": [
+        {
+            "ticker": "MSFT",
+            "score": 640,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "BLK",
+            "score": 155,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "GS",
+            "score": 148,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "MS",
+            "score": 148,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "SHOP",
+            "score": 146,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
