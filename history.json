@@ -4858,5 +4858,32 @@
             "score": 146,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-09-22": [
+        {
+            "ticker": "C",
+            "score": 214,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "GM",
+            "score": 156,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "SHOP",
+            "score": 150,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "PYPL",
+            "score": 139,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        },
+        {
+            "ticker": "AMGN",
+            "score": 132,
+            "sector": "\ud83d\udc8a Healthcare"
+        }
     ]
 }
