@@ -4939,5 +4939,32 @@
             "score": 109,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-09-25": [
+        {
+            "ticker": "C",
+            "score": 243,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "BAC",
+            "score": 178,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 166,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "DIS",
+            "score": 148,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "DDOG",
+            "score": 138,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
