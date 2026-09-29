@@ -4966,5 +4966,32 @@
             "score": 138,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-09-29": [
+        {
+            "ticker": "C",
+            "score": 197,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 153,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "NKE",
+            "score": 144,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "SBUX",
+            "score": 118,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "WFC",
+            "score": 118,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
