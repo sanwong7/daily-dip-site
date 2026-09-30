@@ -4993,5 +4993,32 @@
             "score": 118,
             "sector": "\ud83c\udfe6 Financials"
         }
+    ],
+    "2026-09-30": [
+        {
+            "ticker": "C",
+            "score": 179,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 158,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "NKE",
+            "score": 147,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "DELL",
+            "score": 134,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "COIN",
+            "score": 131,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        }
     ]
 }
