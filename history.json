@@ -5074,5 +5074,32 @@
             "score": 141,
             "sector": "\ud83e\ude99 Crypto & Fintech"
         }
+    ],
+    "2026-10-03": [
+        {
+            "ticker": "CDNS",
+            "score": 168,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "COIN",
+            "score": 149,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        },
+        {
+            "ticker": "NKE",
+            "score": 149,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "RIVN",
+            "score": 145,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "HPQ",
+            "score": 121,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
