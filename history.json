@@ -5101,5 +5101,32 @@
             "score": 121,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-10-06": [
+        {
+            "ticker": "C",
+            "score": 199,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "CDNS",
+            "score": 193,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "JPM",
+            "score": 161,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "COIN",
+            "score": 139,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        },
+        {
+            "ticker": "DIS",
+            "score": 137,
+            "sector": "\ud83d\udce1 Comms & Media"
+        }
     ]
 }
