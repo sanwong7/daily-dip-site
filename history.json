@@ -5155,5 +5155,32 @@
             "score": 144,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-10-08": [
+        {
+            "ticker": "C",
+            "score": 197,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "DELL",
+            "score": 144,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "BKNG",
+            "score": 135,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "COIN",
+            "score": 131,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        },
+        {
+            "ticker": "GE",
+            "score": 129,
+            "sector": "\ud83c\udfed Industrials"
+        }
     ]
 }
