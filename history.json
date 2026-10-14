@@ -5263,5 +5263,32 @@
             "score": 138,
             "sector": "\ud83d\udc8a Healthcare"
         }
+    ],
+    "2026-10-14": [
+        {
+            "ticker": "DIS",
+            "score": 176,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "BAC",
+            "score": 142,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "SAP",
+            "score": 135,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "ADI",
+            "score": 132,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "STLA",
+            "score": 129,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        }
     ]
 }
