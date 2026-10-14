@@ -5267,28 +5267,28 @@
     "2026-10-14": [
         {
             "ticker": "DIS",
-            "score": 176,
+            "score": 179,
             "sector": "\ud83d\udce1 Comms & Media"
         },
         {
-            "ticker": "BAC",
-            "score": 142,
-            "sector": "\ud83c\udfe6 Financials"
-        },
-        {
-            "ticker": "SAP",
-            "score": 135,
+            "ticker": "AAPL",
+            "score": 143,
             "sector": "\ud83d\udcbb Tech & Software"
         },
         {
+            "ticker": "AFRM",
+            "score": 138,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
             "ticker": "ADI",
-            "score": 132,
+            "score": 133,
             "sector": "\u26a1 Semiconductors"
         },
         {
-            "ticker": "STLA",
-            "score": 129,
-            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+            "ticker": "META",
+            "score": 125,
+            "sector": "\ud83d\udce1 Comms & Media"
         }
     ]
 }
