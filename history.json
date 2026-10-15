@@ -5290,5 +5290,32 @@
             "score": 125,
             "sector": "\ud83d\udce1 Comms & Media"
         }
+    ],
+    "2026-10-15": [
+        {
+            "ticker": "DIS",
+            "score": 189,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "TSM",
+            "score": 167,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "ARM",
+            "score": 139,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "HIMS",
+            "score": 139,
+            "sector": "\ud83d\udc8a Healthcare"
+        },
+        {
+            "ticker": "AFRM",
+            "score": 134,
+            "sector": "\ud83c\udfe6 Financials"
+        }
     ]
 }
