@@ -5347,29 +5347,29 @@
     ],
     "2026-10-20": [
         {
-            "ticker": "DE",
-            "score": 259,
-            "sector": "\ud83c\udfed Industrials"
+            "ticker": "NVDA",
+            "score": 225,
+            "sector": "\u26a1 Semiconductors"
         },
         {
             "ticker": "MDB",
-            "score": 204,
+            "score": 197,
             "sector": "\ud83d\udcbb Tech & Software"
         },
         {
             "ticker": "DIS",
-            "score": 171,
+            "score": 179,
             "sector": "\ud83d\udce1 Comms & Media"
         },
         {
-            "ticker": "U",
-            "score": 156,
+            "ticker": "SNOW",
+            "score": 149,
             "sector": "\ud83d\udcbb Tech & Software"
         },
         {
-            "ticker": "IONQ",
-            "score": 150,
-            "sector": "\ud83d\udcbb Tech & Software"
+            "ticker": "MSTR",
+            "score": 137,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
         }
     ]
 }
