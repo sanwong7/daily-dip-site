@@ -5371,5 +5371,32 @@
             "score": 137,
             "sector": "\ud83e\ude99 Crypto & Fintech"
         }
+    ],
+    "2026-10-21": [
+        {
+            "ticker": "DE",
+            "score": 269,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "NVDA",
+            "score": 234,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "ARM",
+            "score": 173,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "SMCI",
+            "score": 146,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "DELL",
+            "score": 131,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
