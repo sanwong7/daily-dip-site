@@ -5452,5 +5452,32 @@
             "score": 102,
             "sector": "\u26a1 Semiconductors"
         }
+    ],
+    "2026-10-27": [
+        {
+            "ticker": "ON",
+            "score": 346,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "JD",
+            "score": 181,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "CMG",
+            "score": 156,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "GE",
+            "score": 143,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "COIN",
+            "score": 134,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        }
     ]
 }
