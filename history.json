@@ -5479,5 +5479,32 @@
             "score": 134,
             "sector": "\ud83e\ude99 Crypto & Fintech"
         }
+    ],
+    "2026-10-28": [
+        {
+            "ticker": "GE",
+            "score": 185,
+            "sector": "\ud83c\udfed Industrials"
+        },
+        {
+            "ticker": "CMG",
+            "score": 169,
+            "sector": "\ud83d\udecd\ufe0f Cons. Cyclical"
+        },
+        {
+            "ticker": "IONQ",
+            "score": 157,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "DIS",
+            "score": 156,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "MSTR",
+            "score": 148,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        }
     ]
 }
