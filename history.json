@@ -5506,5 +5506,32 @@
             "score": 148,
             "sector": "\ud83e\ude99 Crypto & Fintech"
         }
+    ],
+    "2026-10-29": [
+        {
+            "ticker": "HOOD",
+            "score": 181,
+            "sector": "\ud83e\ude99 Crypto & Fintech"
+        },
+        {
+            "ticker": "DIS",
+            "score": 176,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "AFRM",
+            "score": 158,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "IONQ",
+            "score": 152,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "AMD",
+            "score": 146,
+            "sector": "\u26a1 Semiconductors"
+        }
     ]
 }
