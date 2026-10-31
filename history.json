@@ -5560,5 +5560,32 @@
             "score": 140,
             "sector": "\ud83d\udcbb Tech & Software"
         }
+    ],
+    "2026-10-31": [
+        {
+            "ticker": "ON",
+            "score": 349,
+            "sector": "\u26a1 Semiconductors"
+        },
+        {
+            "ticker": "DIS",
+            "score": 186,
+            "sector": "\ud83d\udce1 Comms & Media"
+        },
+        {
+            "ticker": "AFRM",
+            "score": 158,
+            "sector": "\ud83c\udfe6 Financials"
+        },
+        {
+            "ticker": "MSFT",
+            "score": 150,
+            "sector": "\ud83d\udcbb Tech & Software"
+        },
+        {
+            "ticker": "DDOG",
+            "score": 140,
+            "sector": "\ud83d\udcbb Tech & Software"
+        }
     ]
 }
